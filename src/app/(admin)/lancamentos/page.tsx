@@ -65,42 +65,70 @@ export default function LancamentosPage() {
 
     buscarDadosMestres();
 
+    // ========================================================================
+    // CANAL ÚNICO DE SINCRONIZAÇÃO (Com Proteção contra Duplicidade)
+    // ========================================================================
     const canalSincronizacao = supabase
       .channel("painel_lancamentos_ifnmg")
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "aulas" },
         (payload) => {
           setAulas((listaAntiga) => {
-            if (payload.eventType === "UPDATE")
+            if (payload.eventType === "UPDATE") {
               return listaAntiga.map((a) =>
-                a.id === payload.new.id ? payload.new : a,
+                String(a.id) === String(payload.new.id) ? payload.new : a,
               );
-            if (payload.eventType === "INSERT")
+            }
+            if (payload.eventType === "INSERT") {
+              // PROTEÇÃO DE CORRIDA: Verifica se a aula já foi carregada pela função recarregarAulas()
+              const jaExiste = listaAntiga.some(
+                (a) => String(a.id) === String(payload.new.id),
+              );
+              if (jaExiste) return listaAntiga; // Se já existe, ignora o WebSocket
+
               return [...listaAntiga, payload.new];
-            if (payload.eventType === "DELETE")
-              return listaAntiga.filter((a) => a.id !== payload.old.id);
+            }
+            if (payload.eventType === "DELETE") {
+              return listaAntiga.filter(
+                (a) => String(a.id) !== String(payload.old.id),
+              );
+            }
             return listaAntiga;
           });
         },
       )
+
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "professores" },
         (payload) => {
           setProfessores((listaAntiga) => {
-            if (payload.eventType === "UPDATE")
+            if (payload.eventType === "UPDATE") {
               return listaAntiga.map((p) =>
-                p.id === payload.new.id ? payload.new : p,
+                String(p.id) === String(payload.new.id) ? payload.new : p,
               );
-            if (payload.eventType === "INSERT")
+            }
+            if (payload.eventType === "INSERT") {
+              // PROTEÇÃO DE CORRIDA PARA PROFESSORES
+              const jaExiste = listaAntiga.some(
+                (p) => String(p.id) === String(payload.new.id),
+              );
+              if (jaExiste) return listaAntiga;
+
               return [...listaAntiga, payload.new];
-            if (payload.eventType === "DELETE")
-              return listaAntiga.filter((p) => p.id !== payload.old.id);
+            }
+            if (payload.eventType === "DELETE") {
+              return listaAntiga.filter(
+                (p) => String(p.id) !== String(payload.old.id),
+              );
+            }
             return listaAntiga;
           });
         },
       )
+
       .subscribe();
 
     return () => {
