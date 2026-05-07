@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function AdminLayout({
   children,
@@ -10,9 +11,51 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [menuAberto, setMenuAberto] = useState(false);
+  const router = useRouter();
 
-  // Estrutura do Menu
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [verificandoAuth, setVerificandoAuth] = useState(true);
+
+  // ==========================================================================
+  // GUARDIÃO DE AUTENTICAÇÃO (PROTEÇÃO DAS ROTAS ADMIN)
+  // ==========================================================================
+  useEffect(() => {
+    const verificarSessao = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        // Se não tem sessão, expulsa para o login
+        router.push("/login");
+      } else {
+        // Se tem, libera a renderização da tela
+        setVerificandoAuth(false);
+      }
+    };
+
+    verificarSessao();
+
+    // Fica escutando mudanças (ex: se a sessão expirar ou o usuário deslogar)
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!session) router.push("/login");
+      },
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const fazerLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
+  // ==========================================================================
+  // ESTRUTURA DO MENU
+  // ==========================================================================
   const gruposMenu = [
     {
       titulo: "Visão Geral",
@@ -28,7 +71,6 @@ export default function AdminLayout({
     {
       titulo: "Base de Dados",
       itens: [
-        // Juntamos Cursos e Turmas em um link só!
         { nome: "Cursos e Turmas", href: "/cadastros/cursos", icone: "🎓" },
         { nome: "Disciplinas", href: "/cadastros/disciplinas", icone: "📚" },
         { nome: "Professores", href: "/cadastros/professores", icone: "👨‍🏫" },
@@ -36,6 +78,15 @@ export default function AdminLayout({
       ],
     },
   ];
+
+  // Enquanto estiver checando quem é o usuário, mostra uma tela em branco com spinner
+  if (verificandoAuth) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
@@ -53,7 +104,6 @@ export default function AdminLayout({
           menuAberto ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >
-        {/* LOGO / CABEÇALHO DO MENU */}
         <div className="p-6 bg-green-950 flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-2xl font-black italic tracking-tighter text-white">
@@ -66,7 +116,6 @@ export default function AdminLayout({
               IFNMG - Campus Januária
             </p>
           </div>
-          {/* Botão fechar no mobile */}
           <button
             onClick={() => setMenuAberto(false)}
             className="md:hidden text-green-200 hover:text-white"
@@ -75,7 +124,6 @@ export default function AdminLayout({
           </button>
         </div>
 
-        {/* LINKS DE NAVEGAÇÃO */}
         <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">
           {gruposMenu.map((grupo, index) => (
             <div key={index} className="mb-6">
@@ -92,11 +140,7 @@ export default function AdminLayout({
                       <Link
                         href={item.href}
                         onClick={() => setMenuAberto(false)}
-                        className={`flex items-center gap-3 px-6 py-2.5 transition-colors relative ${
-                          ativo
-                            ? "bg-green-800 text-white font-bold"
-                            : "text-green-100 hover:bg-green-800/50 hover:text-white font-medium"
-                        }`}
+                        className={`flex items-center gap-3 px-6 py-2.5 transition-colors relative ${ativo ? "bg-green-800 text-white font-bold" : "text-green-100 hover:bg-green-800/50 hover:text-white font-medium"}`}
                       >
                         {ativo && (
                           <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-green-400 rounded-r-md"></span>
@@ -112,8 +156,8 @@ export default function AdminLayout({
           ))}
         </nav>
 
-        {/* RODAPÉ DO MENU (LINK PARA VISÃO PÚBLICA) */}
-        <div className="p-4 bg-green-950/50 border-t border-green-800 shrink-0">
+        {/* RODAPÉ DO MENU COM BOTÃO DE SAIR */}
+        <div className="p-4 bg-green-950/50 border-t border-green-800 shrink-0 space-y-2">
           <Link
             href="/"
             target="_blank"
@@ -121,12 +165,17 @@ export default function AdminLayout({
           >
             <span>👁️</span> Visão Pública
           </Link>
+          <button
+            onClick={fazerLogout}
+            className="flex items-center justify-center gap-2 w-full border border-green-700 text-green-300 hover:bg-green-800 hover:text-white py-2 rounded-lg text-xs font-bold transition-colors"
+          >
+            <span>🚪</span> Sair do Sistema
+          </button>
         </div>
       </aside>
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {/* HEADER MOBILE */}
         <header className="md:hidden bg-white shadow-sm border-b border-gray-200 p-4 flex items-center gap-4 shrink-0 print:hidden">
           <button
             onClick={() => setMenuAberto(true)}
@@ -149,13 +198,11 @@ export default function AdminLayout({
           <span className="font-black text-green-800 italic">SGH | Admin</span>
         </header>
 
-        {/* RENDERIZAÇÃO DAS TELAS AQUI DENTRO */}
         <main className="flex-1 overflow-y-auto bg-gray-50 relative p-4 md:p-8">
           {children}
         </main>
       </div>
 
-      {/* CSS para barra de rolagem estilizada no menu */}
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;

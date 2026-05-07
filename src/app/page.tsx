@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 
 export default function HomePage() {
   const [carregando, setCarregando] = useState(true);
@@ -12,7 +13,7 @@ export default function HomePage() {
     professores: [],
     disciplinas: [],
     espacos: [],
-    categorias: [], // Adicionado para suporte às categorias dinâmicas
+    categorias: [],
     slots: [],
   });
 
@@ -32,44 +33,49 @@ export default function HomePage() {
   useEffect(() => {
     async function carregarTudo() {
       setCarregando(true);
-      const [
-        { data: aulas },
-        { data: turmas },
-        { data: cursos },
-        { data: professores },
-        { data: disciplinas },
-        { data: espacos },
-        { data: categorias },
-        { data: slots },
-      ] = await Promise.all([
-        supabase.from("aulas").select("*"),
-        supabase.from("turmas").select("*").order("codigo"),
-        supabase.from("cursos").select("*").order("nome"),
-        supabase.from("professores").select("*").order("nome"),
-        supabase.from("disciplinas").select("*").order("nome"),
-        supabase.from("espacos").select("*").order("nome"),
-        supabase.from("categorias_espacos").select("*").order("nome"),
-        supabase.from("slots_horarios").select("*").order("hora_inicio"),
-      ]);
+      try {
+        const [
+          { data: aulas },
+          { data: turmas },
+          { data: cursos },
+          { data: professores },
+          { data: disciplinas },
+          { data: espacos },
+          { data: categorias },
+          { data: slots },
+        ] = await Promise.all([
+          supabase.from("aulas").select("*"),
+          supabase.from("turmas").select("*").order("codigo"),
+          supabase.from("cursos").select("*").order("nome"),
+          supabase.from("professores").select("*").order("nome"),
+          supabase.from("disciplinas").select("*").order("nome"),
+          supabase.from("espacos").select("*").order("nome"),
+          supabase.from("categorias_espacos").select("*").order("nome"),
+          supabase.from("slots_horarios").select("*").order("hora_inicio"),
+        ]);
 
-      setDados({
-        aulas,
-        turmas,
-        cursos,
-        professores,
-        disciplinas,
-        espacos,
-        categorias,
-        slots,
-      });
-      setCarregando(false);
+        setDados({
+          aulas,
+          turmas,
+          cursos,
+          professores,
+          disciplinas,
+          espacos,
+          categorias,
+          slots,
+        });
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+      } finally {
+        setCarregando(false);
+      }
     }
     carregarTudo();
   }, []);
 
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
 
-  // Agrupamento por Turnos
+  // Agrupamento lógico por Turnos
   const turnos = [
     {
       nome: "Manhã",
@@ -87,10 +93,7 @@ export default function HomePage() {
     },
   ];
 
-  // ==========================================================================
-  // FUNÇÕES DE RENDERIZAÇÃO DE OPÇÕES AGRUPADAS
-  // ==========================================================================
-
+  // Renderização de opções agrupadas (UX)
   const renderOpcoesTurmas = () => {
     return dados.cursos.map((curso: any) => {
       const turmasDoCurso = dados.turmas.filter(
@@ -128,7 +131,7 @@ export default function HomePage() {
   };
 
   const obterTituloGrade = () => {
-    if (!idSelecionado) return "Selecione um filtro";
+    if (!idSelecionado) return "";
     if (tipoFiltro === "TURMA")
       return `Turma: ${dados.turmas.find((t: any) => t.id === idSelecionado)?.codigo}`;
     if (tipoFiltro === "PROFESSOR")
@@ -147,7 +150,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-white pb-20">
+    <div className="min-h-screen bg-white pb-10">
       {/* HEADER - OCULTO NA IMPRESSÃO */}
       <header className="bg-green-800 text-white p-6 shadow-md print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
@@ -216,28 +219,30 @@ export default function HomePage() {
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-3xl">
             <span className="text-8xl mb-4">📅</span>
             <p className="text-xl font-black text-gray-400 text-center px-4">
-              Consulte o horário selecionando as opções acima.
+              Selecione uma opção acima para visualizar o horário.
             </p>
           </div>
         ) : (
           <div className="space-y-6 print:space-y-0">
+            {/* Título da Grade */}
             <div className="text-center py-4 print:py-0 print:mb-4">
               <h2 className="text-3xl font-black text-gray-800 uppercase print:text-xl">
                 {obterTituloGrade()}
               </h2>
               <div className="hidden print:block text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                IFNMG Campus Januária • Horário Gerado em{" "}
+                IFNMG Campus Januária • Gerado em{" "}
                 {new Date().toLocaleDateString("pt-BR")} às{" "}
                 {new Date().toLocaleTimeString("pt-BR")}
               </div>
             </div>
 
+            {/* TABELAS POR TURNO */}
             {turnos.map(
               (turno, index) =>
                 turno.slots.length > 0 && (
                   <div
                     key={turno.nome}
-                    className={`overflow-hidden bg-white border border-gray-200 rounded-lg print:border-gray-300 print:rounded-none print:shadow-none print:mb-0 ${index > 0 ? "print:break-before-page" : ""}`}
+                    className={`overflow-hidden bg-white border border-gray-200 rounded-lg print:border-gray-300 print:rounded-none print:mb-0 ${index > 0 ? "print:break-before-page" : ""}`}
                   >
                     <div className="bg-gray-100 p-2 text-center border-b border-gray-200 print:bg-gray-50">
                       <h3 className="text-sm font-black uppercase text-gray-600 tracking-widest">
@@ -368,6 +373,27 @@ export default function HomePage() {
         )}
       </main>
 
+      {/* RODAPÉ INFORMATIVO COM ACESSO À GESTÃO */}
+      <footer className="max-w-7xl mx-auto p-8 text-center print:hidden border-t border-gray-100 mt-12">
+        <div className="flex flex-col items-center gap-4">
+          <div className="text-gray-400 text-xs leading-relaxed max-w-md">
+            Para gerar um PDF, selecione o filtro desejado e utilize a função de
+            impressão do navegador.
+            <br />
+            Certifique-se de que a opção "Gráficos de segundo plano" está ativa.
+          </div>
+
+          <Link
+            href="/login"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-gray-400 hover:text-green-700 hover:border-green-200 hover:bg-green-50 transition-all text-xs font-bold group"
+          >
+            <span className="opacity-60 group-hover:opacity-100">🔒</span>
+            Acesso Restrito à Gestão
+          </Link>
+        </div>
+      </footer>
+
+      {/* CSS GLOBAL PARA IMPRESSÃO */}
       <style jsx global>{`
         @media print {
           @page {
