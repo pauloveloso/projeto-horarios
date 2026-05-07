@@ -189,7 +189,7 @@ export default function HomePage() {
             <select
               value={idSelecionado}
               onChange={(e) => setIdSelecionado(e.target.value)}
-              className="bg-white text-gray-800 rounded-lg p-2 text-sm font-bold outline-none border-none min-w-[250px] shadow-inner"
+              className="bg-white text-gray-800 rounded-lg p-2 text-sm font-bold outline-none border-none w-full sm:w-[280px] shadow-inner truncate"
             >
               <option value="">Escolha...</option>
               {tipoFiltro === "TURMA" && renderOpcoesTurmas()}
