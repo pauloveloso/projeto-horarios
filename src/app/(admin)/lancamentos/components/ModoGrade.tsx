@@ -4,16 +4,16 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function ModoGrade({
+  versaoId, // <-- NOVO: Recebendo a versão
   aulas,
   turmas,
-  cursos = [], // Adicionado para permitir o agrupamento por curso
+  cursos = [],
   professores,
   disciplinas,
   espacos,
   slots,
   recarregarAulas,
 }: any) {
-  // Alterado para iniciar vazio, obrigando a seleção da turma
   const [filtroTurma, setFiltroTurma] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [dadosModal, setDadosModal] = useState<any>(null);
@@ -65,7 +65,6 @@ export default function ModoGrade({
     linhasValidas.forEach((aulaAtual: any) => {
       const errosDaLinha: string[] = [];
 
-      // 1. REGRAS INDEPENDENTES DE HORÁRIO
       if (aulaAtual.professor_id && aulaAtual.dia_semana) {
         const professorResp = professores.find(
           (p: any) => String(p.id) === String(aulaAtual.professor_id),
@@ -83,7 +82,6 @@ export default function ModoGrade({
         }
       }
 
-      // 2. REGRAS DEPENDENTES DE HORÁRIO
       const slotAtual = getSlot(aulaAtual.slot_horario_id);
       if (slotAtual) {
         const turnoAtual = getTurno(slotAtual.hora_inicio);
@@ -233,6 +231,7 @@ export default function ModoGrade({
 
   const colarAula = async (diaId: string, slotId: string) => {
     const payload = {
+      versao_id: versaoId, // <-- NOVO: Injetando a versão na cópia
       turma_id: aulaCopiada.turma_id,
       disciplina_id: aulaCopiada.disciplina_id,
       professor_id: aulaCopiada.professor_id || null,
@@ -265,7 +264,7 @@ export default function ModoGrade({
 
   const salvarAula = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { ...dadosModal };
+    const payload = { ...dadosModal, versao_id: versaoId }; // <-- NOVO: Injetando a versão no modal de criação
 
     if (payload.professor_id === "") payload.professor_id = null;
     if (payload.espaco_id === "") payload.espaco_id = null;
@@ -313,7 +312,6 @@ export default function ModoGrade({
     (t: any) => String(t.id) === String(filtroTurma),
   );
 
-  // Filtra disciplinas baseadas no curso da turma selecionada
   const disciplinasFiltradas = turmaAtualObj
     ? disciplinas
         .filter(
@@ -322,7 +320,6 @@ export default function ModoGrade({
         .sort((a: any, b: any) => a.nome.localeCompare(b.nome))
     : [];
 
-  // Função para renderizar as turmas agrupadas por curso
   const renderOpcoesTurmas = () => {
     if (!cursos || cursos.length === 0) {
       return turmas.map((t: any) => (
@@ -601,7 +598,6 @@ export default function ModoGrade({
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                     Disciplina
                   </label>
-                  {/* Select de Disciplina atualizado para considerar as regras de filtro */}
                   <select
                     required
                     className="w-full border rounded p-2 text-base outline-none focus:ring-2 focus:ring-green-500 bg-white"

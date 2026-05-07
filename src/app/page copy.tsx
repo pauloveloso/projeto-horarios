@@ -6,11 +6,6 @@ import Link from "next/link";
 
 export default function HomePage() {
   const [carregando, setCarregando] = useState(true);
-
-  // Estados para Controle de Versão
-  const [versoes, setVersoes] = useState<any[]>([]);
-  const [versaoSelecionada, setVersaoSelecionada] = useState<string>("");
-
   const [dados, setDados] = useState<any>({
     aulas: [],
     turmas: [],
@@ -35,29 +30,7 @@ export default function HomePage() {
     { id: "SEXTA", nome: "Sexta" },
   ];
 
-  // 1. Carrega as Versões Disponíveis
   useEffect(() => {
-    async function carregarVersoes() {
-      const { data } = await supabase
-        .from("versoes_grade")
-        .select("*")
-        .order("data_inicio_vigencia", { ascending: false });
-
-      if (data && data.length > 0) {
-        setVersoes(data);
-        const ativa = data.find((v) => v.status === "PUBLICADA") || data[0];
-        setVersaoSelecionada(ativa.id);
-      } else {
-        setCarregando(false);
-      }
-    }
-    carregarVersoes();
-  }, []);
-
-  // 2. Carrega as Aulas Baseadas na Versão Escolhida
-  useEffect(() => {
-    if (!versaoSelecionada) return;
-
     async function carregarTudo() {
       setCarregando(true);
       try {
@@ -71,8 +44,7 @@ export default function HomePage() {
           { data: categorias },
           { data: slots },
         ] = await Promise.all([
-          // Busca APENAS as aulas da versão selecionada
-          supabase.from("aulas").select("*").eq("versao_id", versaoSelecionada),
+          supabase.from("aulas").select("*"),
           supabase.from("turmas").select("*").order("codigo"),
           supabase.from("cursos").select("*").order("nome"),
           supabase.from("professores").select("*").order("nome"),
@@ -83,7 +55,7 @@ export default function HomePage() {
         ]);
 
         setDados({
-          aulas: aulas || [],
+          aulas,
           turmas,
           cursos,
           professores,
@@ -99,17 +71,9 @@ export default function HomePage() {
       }
     }
     carregarTudo();
-  }, [versaoSelecionada]);
+  }, []);
 
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
-
-  const formatarData = (dataStr: string) => {
-    if (!dataStr) return "";
-    const data = new Date(dataStr);
-    return new Date(
-      data.getTime() + data.getTimezoneOffset() * 60000,
-    ).toLocaleDateString("pt-BR");
-  };
 
   // Agrupamento lógico por Turnos
   const turnos = [
@@ -177,11 +141,7 @@ export default function HomePage() {
     return "";
   };
 
-  const infoVersao = versoes.find(
-    (v) => String(v.id) === String(versaoSelecionada),
-  );
-
-  if (carregando && !versaoSelecionada) {
+  if (carregando) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
@@ -201,34 +161,9 @@ export default function HomePage() {
                 | IFNMG
               </span>
             </h1>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
-              <p className="text-sm font-medium text-green-100 uppercase tracking-widest">
-                Portal de Horários
-              </p>
-
-              {/* SELETOR DE VERSÃO - Discreto, ao lado do nome do portal */}
-              {versoes.length > 0 && (
-                <select
-                  value={versaoSelecionada}
-                  onChange={(e) => {
-                    setVersaoSelecionada(e.target.value);
-                    setIdSelecionado("");
-                  }}
-                  className="bg-green-900 text-green-100 text-[11px] font-bold uppercase rounded border border-green-700 px-2 py-1 outline-none cursor-pointer hover:bg-green-700 transition-colors"
-                >
-                  {versoes.map((v) => (
-                    <option
-                      key={v.id}
-                      value={v.id}
-                      className="bg-white text-gray-800"
-                    >
-                      {v.nome} - {v.semestre}{" "}
-                      {v.status === "PUBLICADA" ? "(Atual)" : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            <p className="text-sm font-medium text-green-100 uppercase tracking-widest">
+              Portal de Horários
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 bg-green-900/40 p-4 rounded-xl border border-green-700/50">
@@ -279,14 +214,7 @@ export default function HomePage() {
       </header>
 
       {/* ÁREA DA GRADE */}
-      <main className="max-w-7xl mx-auto mt-6 p-2 relative">
-        {/* Loading overlay discreto ao trocar de versão */}
-        {carregando && idSelecionado && (
-          <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
-            <div className="w-10 h-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-
+      <main className="max-w-7xl mx-auto mt-6 p-2">
         {!idSelecionado ? (
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-3xl">
             <span className="text-8xl mb-4">📅</span>
@@ -296,21 +224,12 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-6 print:space-y-0">
-            {/* Título da Grade com Data da Versão */}
+            {/* Título da Grade */}
             <div className="text-center py-4 print:py-0 print:mb-4">
               <h2 className="text-3xl font-black text-gray-800 uppercase print:text-xl">
                 {obterTituloGrade()}
               </h2>
-
-              {/* Data da versão integrada elegantemente ao título */}
-              {infoVersao && (
-                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mt-1">
-                  Vigência: A partir de{" "}
-                  {formatarData(infoVersao.data_inicio_vigencia)}
-                </p>
-              )}
-
-              <div className="hidden print:block text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">
+              <div className="hidden print:block text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                 IFNMG Campus Januária • Gerado em{" "}
                 {new Date().toLocaleDateString("pt-BR")} às{" "}
                 {new Date().toLocaleTimeString("pt-BR")}
@@ -359,7 +278,6 @@ export default function HomePage() {
                             </td>
 
                             {diasSemana.map((dia) => {
-                              // Mantido slot_horario_id original da sua tabela aulas
                               const aula = dados.aulas.find((a: any) => {
                                 const mesmoTempo =
                                   a.dia_semana === dia.id &&

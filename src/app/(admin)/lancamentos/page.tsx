@@ -10,41 +10,68 @@ export default function LancamentosPage() {
   const [modoAtivo, setModoAtivo] = useState<"PLANILHA" | "GRADE">("PLANILHA");
   const [carregando, setCarregando] = useState(true);
 
+  // NOVO ESTADO: Guarda a versão de rascunho ativa
+  const [versaoRascunho, setVersaoRascunho] = useState<any>(null);
+
   const [aulas, setAulas] = useState<any[]>([]);
   const [turmas, setTurmas] = useState<any[]>([]);
-  const [cursos, setCursos] = useState<any[]>([]); // NOVA VARIÁVEL DE ESTADO
+  const [cursos, setCursos] = useState<any[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
   const [disciplinas, setDisciplinas] = useState<any[]>([]);
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
 
+  // ATUALIZADO: Só busca as aulas do rascunho atual
   const buscarAulas = async () => {
-    const { data } = await supabase.from("aulas").select("*");
+    if (!versaoRascunho) return;
+    const { data } = await supabase
+      .from("aulas")
+      .select("*")
+      .eq("versao_id", versaoRascunho.id);
     if (data) setAulas(data);
   };
 
   useEffect(() => {
     let montado = true;
+    let rascunhoAtualId = ""; // Variável auxiliar para o WebSocket não se perder no closure
 
     const buscarDadosMestres = async () => {
       setCarregando(true);
       try {
+        // 1. PRIMEIRO: Descobre qual é o rascunho atual
+        const { data: dVersoes } = await supabase
+          .from("versoes_grade")
+          .select("*")
+          .eq("status", "RASCUNHO")
+          .limit(1);
+
+        const rascunho = dVersoes && dVersoes.length > 0 ? dVersoes[0] : null;
+
+        if (montado) setVersaoRascunho(rascunho);
+        if (rascunho) rascunhoAtualId = rascunho.id;
+
+        // 2. Prepara a query de aulas dinamicamente
+        const queryAulas = rascunho
+          ? supabase.from("aulas").select("*").eq("versao_id", rascunho.id)
+          : null;
+
+        // 3. Busca todos os dados mestres simultaneamente
         const [
           { data: dTurmas },
-          { data: dCursos }, // BUSCANDO OS CURSOS
+          { data: dCursos },
           { data: dProfessores },
           { data: dDisciplinas },
           { data: dEspacos },
           { data: dSlots },
-          { data: dAulas },
+          respostaAulas,
         ] = await Promise.all([
           supabase.from("turmas").select("*").order("codigo"),
-          supabase.from("cursos").select("*"), // NOVA BUSCA
+          supabase.from("cursos").select("*"),
           supabase.from("professores").select("*").order("nome"),
           supabase.from("disciplinas").select("*").order("nome"),
           supabase.from("espacos").select("*").order("nome"),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
-          supabase.from("aulas").select("*"),
+          queryAulas ? queryAulas : Promise.resolve({ data: [] }),
         ]);
 
         if (!montado) return;
@@ -55,7 +82,7 @@ export default function LancamentosPage() {
         if (dDisciplinas) setDisciplinas(dDisciplinas);
         if (dEspacos) setEspacos(dEspacos);
         if (dSlots) setSlots(dSlots);
-        if (dAulas) setAulas(dAulas);
+        if (respostaAulas && respostaAulas.data) setAulas(respostaAulas.data);
       } catch (error) {
         console.error("Erro ao montar o sistema:", error);
       } finally {
@@ -66,7 +93,7 @@ export default function LancamentosPage() {
     buscarDadosMestres();
 
     // ========================================================================
-    // CANAL ÚNICO DE SINCRONIZAÇÃO (Com Proteção contra Duplicidade)
+    // CANAL ÚNICO DE SINCRONIZAÇÃO (Com Proteção contra Duplicidade e de Versão)
     // ========================================================================
     const canalSincronizacao = supabase
       .channel("painel_lancamentos_ifnmg")
@@ -76,17 +103,26 @@ export default function LancamentosPage() {
         { event: "*", schema: "public", table: "aulas" },
         (payload) => {
           setAulas((listaAntiga) => {
+            // PROTEÇÃO DE RASCUNHO: Ignora qualquer aula que não pertença a este rascunho
+            if (
+              payload.eventType === "INSERT" ||
+              payload.eventType === "UPDATE"
+            ) {
+              if (String(payload.new.versao_id) !== String(rascunhoAtualId)) {
+                return listaAntiga;
+              }
+            }
+
             if (payload.eventType === "UPDATE") {
               return listaAntiga.map((a) =>
                 String(a.id) === String(payload.new.id) ? payload.new : a,
               );
             }
             if (payload.eventType === "INSERT") {
-              // PROTEÇÃO DE CORRIDA: Verifica se a aula já foi carregada pela função recarregarAulas()
               const jaExiste = listaAntiga.some(
                 (a) => String(a.id) === String(payload.new.id),
               );
-              if (jaExiste) return listaAntiga; // Se já existe, ignora o WebSocket
+              if (jaExiste) return listaAntiga;
 
               return [...listaAntiga, payload.new];
             }
@@ -111,7 +147,6 @@ export default function LancamentosPage() {
               );
             }
             if (payload.eventType === "INSERT") {
-              // PROTEÇÃO DE CORRIDA PARA PROFESSORES
               const jaExiste = listaAntiga.some(
                 (p) => String(p.id) === String(payload.new.id),
               );
@@ -153,6 +188,7 @@ export default function LancamentosPage() {
 
   return (
     <div className="space-y-6">
+      {/* CABEÇALHO INTACTO */}
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
         <div>
           <h1 className="text-2xl font-black text-green-800">
@@ -162,6 +198,18 @@ export default function LancamentosPage() {
             Gestão acadêmica do semestre
           </p>
         </div>
+
+        {/* Indicador de Rascunho Discreto */}
+        {versaoRascunho && (
+          <div className="hidden md:flex flex-col items-center justify-center px-4">
+            <span className="text-[10px] font-black uppercase text-gray-400">
+              Editando Rascunho
+            </span>
+            <span className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-200 mt-0.5">
+              {versaoRascunho.nome}
+            </span>
+          </div>
+        )}
 
         <div className="flex bg-gray-100 p-1 rounded-lg shadow-inner">
           <button
@@ -187,30 +235,48 @@ export default function LancamentosPage() {
         </div>
       </div>
 
-      {modoAtivo === "PLANILHA" && (
-        <ModoPlanilha
-          aulas={aulas}
-          turmas={turmas}
-          cursos={cursos} // REPASSANDO OS CURSOS PARA A PLANILHA
-          professores={professores}
-          disciplinas={disciplinas}
-          espacos={espacos}
-          slots={slots}
-          recarregarAulas={buscarAulas}
-        />
-      )}
+      {/* ÁREA DE CONTEÚDO */}
+      {!versaoRascunho ? (
+        <div className="bg-white border border-gray-200 p-12 rounded-xl text-center shadow-sm flex flex-col items-center justify-center">
+          <span className="text-6xl mb-4 opacity-50">📁</span>
+          <h2 className="text-2xl font-black text-gray-800 mb-2">
+            Nenhum Rascunho Ativo
+          </h2>
+          <p className="text-gray-500 font-medium max-w-md mx-auto">
+            Para iniciar os lançamentos, você precisa de um rascunho aberto. Vá
+            até o menu <b>Gestão de Versões</b> e crie ou ative um rascunho.
+          </p>
+        </div>
+      ) : (
+        <>
+          {modoAtivo === "PLANILHA" && (
+            <ModoPlanilha
+              versaoId={versaoRascunho.id} // <-- NOVO: Passando o ID para a planilha
+              aulas={aulas}
+              turmas={turmas}
+              cursos={cursos}
+              professores={professores}
+              disciplinas={disciplinas}
+              espacos={espacos}
+              slots={slots}
+              recarregarAulas={buscarAulas}
+            />
+          )}
 
-      {modoAtivo === "GRADE" && (
-        <ModoGrade
-          aulas={aulas}
-          turmas={turmas}
-          cursos={cursos} // REPASSANDO PARA A GRADE
-          professores={professores}
-          disciplinas={disciplinas}
-          espacos={espacos}
-          slots={slots}
-          recarregarAulas={buscarAulas}
-        />
+          {modoAtivo === "GRADE" && (
+            <ModoGrade
+              versaoId={versaoRascunho.id} // <-- NOVO: Passando o ID para a grade
+              aulas={aulas}
+              turmas={turmas}
+              cursos={cursos}
+              professores={professores}
+              disciplinas={disciplinas}
+              espacos={espacos}
+              slots={slots}
+              recarregarAulas={buscarAulas}
+            />
+          )}
+        </>
       )}
     </div>
   );

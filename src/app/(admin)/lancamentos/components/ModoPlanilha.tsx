@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function ModoPlanilha({
+  versaoId, // <-- NOVO: Recebendo a versão
   aulas,
   turmas,
-  cursos = [], // Adicionado para permitir o agrupamento por curso
+  cursos = [],
   professores,
   disciplinas,
   espacos,
@@ -23,7 +24,6 @@ export default function ModoPlanilha({
   useEffect(() => {
     const linhasDoBanco = aulas.map((a: any) => ({ ...a }));
 
-    // Dicionário auxiliar para ordenar os dias da semana logicamente
     const mapaDiasOrdenacao: Record<string, number> = {
       SEGUNDA: 1,
       TERCA: 2,
@@ -33,7 +33,6 @@ export default function ModoPlanilha({
     };
 
     linhasDoBanco.sort((a: any, b: any) => {
-      // 1. ORDENAÇÃO POR CURSO
       const turmaObjA = turmas.find(
         (t: any) => String(t.id) === String(a.turma_id),
       );
@@ -52,20 +51,17 @@ export default function ModoPlanilha({
 
       if (cursoA !== cursoB) return cursoA.localeCompare(cursoB);
 
-      // 2. ORDENAÇÃO POR TURMA
       const turmaNomeA = (turmaObjA?.codigo || "").toUpperCase();
       const turmaNomeB = (turmaObjB?.codigo || "").toUpperCase();
 
       if (turmaNomeA !== turmaNomeB)
         return turmaNomeA.localeCompare(turmaNomeB);
 
-      // 3. ORDENAÇÃO POR DIA DA SEMANA
       const diaA = mapaDiasOrdenacao[a.dia_semana] || 99;
       const diaB = mapaDiasOrdenacao[b.dia_semana] || 99;
 
       if (diaA !== diaB) return diaA - diaB;
 
-      // 4. ORDENAÇÃO POR HORÁRIO
       const slotObjA = slots.find(
         (s: any) => String(s.id) === String(a.slot_horario_id),
       );
@@ -81,7 +77,7 @@ export default function ModoPlanilha({
 
     const linhasVazias = Array.from({ length: 5 }, () => criarLinhaVazia());
     setLinhas([...linhasDoBanco, ...linhasVazias]);
-  }, [aulas, turmas, cursos, slots]); // Atualizado para observar mudanças nas novas dependências de ordenação
+  }, [aulas, turmas, cursos, slots]);
 
   const criarLinhaVazia = () => ({
     id: crypto.randomUUID(),
@@ -120,7 +116,6 @@ export default function ModoPlanilha({
     const novasLinhas = linhas.map((linha) => {
       if (linha.id === id) {
         const linhaAtualizada = { ...linha, [campo]: valor };
-        // Limpa a disciplina se a turma for alterada, pois a matriz muda
         if (campo === "turma_id") {
           linhaAtualizada.disciplina_id = "";
         }
@@ -147,6 +142,7 @@ export default function ModoPlanilha({
   const salvarLinhaNoBanco = async (linha: any) => {
     const payload = {
       id: linha.id,
+      versao_id: versaoId, // <-- NOVO: Injetando a versão no salvamento
       turma_id: linha.turma_id,
       disciplina_id: linha.disciplina_id,
       professor_id: linha.professor_id === "" ? null : linha.professor_id,
@@ -337,26 +333,20 @@ export default function ModoPlanilha({
 
   const mapaDeConflitos = calcularConflitos();
 
-  // ==========================================================================
-  // NOVA FUNÇÃO: LEITURA DINÂMICA DA COR DO BANCO DE DADOS
-  // ==========================================================================
   const obterCorDoBanco = (turmaId: string) => {
-    if (!turmaId) return ""; // Linha vazia não tem cor
+    if (!turmaId) return "";
 
-    // Encontra a turma para pegar o ID do curso
     const turmaObj = turmas.find((t: any) => String(t.id) === String(turmaId));
     if (!turmaObj || !turmaObj.curso_id) return "";
 
-    // Encontra o curso correspondente e pega a cor
     const cursoObj = cursos.find(
       (c: any) => String(c.id) === String(turmaObj.curso_id),
     );
     if (!cursoObj || !cursoObj.cor_identificacao) return "";
 
-    return cursoObj.cor_identificacao; // Retorna o Hexadecimal (ex: #d1fae5)
+    return cursoObj.cor_identificacao;
   };
 
-  // Função para renderizar as turmas agrupadas por curso
   const renderOpcoesTurmas = () => {
     if (!cursos || cursos.length === 0) {
       return turmas.map((t: any) => (
@@ -445,15 +435,11 @@ export default function ModoPlanilha({
               const erros = mapaDeConflitos.get(linha.id) || [];
               const temConflito = erros.length > 0;
 
-              // Obtém o Hexadecimal direto do banco
               const corHexadecimal = obterCorDoBanco(linha.turma_id);
 
-              // Tailwind classes base.
-              // 'hover:brightness-95' cria o efeito de passar o mouse mesmo se a cor for injetada via style
               let classeLinha =
                 "border-b transition-all group hover:brightness-95 ";
 
-              // Se tiver conflito, aplica a Borda Vermelha (outline) preservando o fundo
               if (temConflito) {
                 classeLinha +=
                   " outline outline-2 outline-offset-[-2px] outline-red-600 z-10 relative";
@@ -461,7 +447,6 @@ export default function ModoPlanilha({
                 classeLinha += " border-l-4 border-l-yellow-400";
               }
 
-              // Filtra as disciplinas baseadas na turma selecionada
               const turmaSelecionadaObj = turmas.find(
                 (t: any) => String(t.id) === String(linha.turma_id),
               );
@@ -478,7 +463,7 @@ export default function ModoPlanilha({
                   className={classeLinha}
                   style={
                     corHexadecimal ? { backgroundColor: corHexadecimal } : {}
-                  } // Injeção CSS Dinâmica
+                  }
                 >
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
                     <select
