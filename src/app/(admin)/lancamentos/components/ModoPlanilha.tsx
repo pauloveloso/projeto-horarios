@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 export default function ModoPlanilha({
   aulas,
   turmas,
-  cursos,
+  cursos = [], // Adicionado para permitir o agrupamento por curso
   professores,
   disciplinas,
   espacos,
@@ -23,33 +23,65 @@ export default function ModoPlanilha({
   useEffect(() => {
     const linhasDoBanco = aulas.map((a: any) => ({ ...a }));
 
+    // Dicionário auxiliar para ordenar os dias da semana logicamente
+    const mapaDiasOrdenacao: Record<string, number> = {
+      SEGUNDA: 1,
+      TERCA: 2,
+      QUARTA: 3,
+      QUINTA: 4,
+      SEXTA: 5,
+    };
+
     linhasDoBanco.sort((a: any, b: any) => {
-      const turmaA = (
-        turmas.find((t: any) => String(t.id) === String(a.turma_id))?.codigo ||
-        ""
-      ).toUpperCase();
-      const turmaB = (
-        turmas.find((t: any) => String(t.id) === String(b.turma_id))?.codigo ||
-        ""
-      ).toUpperCase();
+      // 1. ORDENAÇÃO POR CURSO
+      const turmaObjA = turmas.find(
+        (t: any) => String(t.id) === String(a.turma_id),
+      );
+      const turmaObjB = turmas.find(
+        (t: any) => String(t.id) === String(b.turma_id),
+      );
 
-      if (turmaA !== turmaB) return turmaA.localeCompare(turmaB);
-
-      const discA = (
-        disciplinas.find((d: any) => String(d.id) === String(a.disciplina_id))
+      const cursoA = (
+        cursos.find((c: any) => String(c.id) === String(turmaObjA?.curso_id))
           ?.nome || ""
       ).toUpperCase();
-      const discB = (
-        disciplinas.find((d: any) => String(d.id) === String(b.disciplina_id))
+      const cursoB = (
+        cursos.find((c: any) => String(c.id) === String(turmaObjB?.curso_id))
           ?.nome || ""
       ).toUpperCase();
 
-      return discA.localeCompare(discB);
+      if (cursoA !== cursoB) return cursoA.localeCompare(cursoB);
+
+      // 2. ORDENAÇÃO POR TURMA
+      const turmaNomeA = (turmaObjA?.codigo || "").toUpperCase();
+      const turmaNomeB = (turmaObjB?.codigo || "").toUpperCase();
+
+      if (turmaNomeA !== turmaNomeB)
+        return turmaNomeA.localeCompare(turmaNomeB);
+
+      // 3. ORDENAÇÃO POR DIA DA SEMANA
+      const diaA = mapaDiasOrdenacao[a.dia_semana] || 99;
+      const diaB = mapaDiasOrdenacao[b.dia_semana] || 99;
+
+      if (diaA !== diaB) return diaA - diaB;
+
+      // 4. ORDENAÇÃO POR HORÁRIO
+      const slotObjA = slots.find(
+        (s: any) => String(s.id) === String(a.slot_horario_id),
+      );
+      const slotObjB = slots.find(
+        (s: any) => String(s.id) === String(b.slot_horario_id),
+      );
+
+      const horaA = slotObjA?.hora_inicio || "99:99";
+      const horaB = slotObjB?.hora_inicio || "99:99";
+
+      return horaA.localeCompare(horaB);
     });
 
     const linhasVazias = Array.from({ length: 5 }, () => criarLinhaVazia());
     setLinhas([...linhasDoBanco, ...linhasVazias]);
-  }, [aulas, turmas, disciplinas]);
+  }, [aulas, turmas, cursos, slots]); // Atualizado para observar mudanças nas novas dependências de ordenação
 
   const criarLinhaVazia = () => ({
     id: crypto.randomUUID(),
@@ -85,9 +117,18 @@ export default function ModoPlanilha({
   };
 
   const atualizarCampo = async (id: string, campo: string, valor: string) => {
-    const novasLinhas = linhas.map((linha) =>
-      linha.id === id ? { ...linha, [campo]: valor } : linha,
-    );
+    const novasLinhas = linhas.map((linha) => {
+      if (linha.id === id) {
+        const linhaAtualizada = { ...linha, [campo]: valor };
+        // Limpa a disciplina se a turma for alterada, pois a matriz muda
+        if (campo === "turma_id") {
+          linhaAtualizada.disciplina_id = "";
+        }
+        return linhaAtualizada;
+      }
+      return linha;
+    });
+
     setLinhas(novasLinhas);
 
     const linhaAtualizada = novasLinhas.find((l) => l.id === id);
@@ -315,6 +356,39 @@ export default function ModoPlanilha({
     return cursoObj.cor_identificacao; // Retorna o Hexadecimal (ex: #d1fae5)
   };
 
+  // Função para renderizar as turmas agrupadas por curso
+  const renderOpcoesTurmas = () => {
+    if (!cursos || cursos.length === 0) {
+      return turmas.map((t: any) => (
+        <option key={t.id} value={t.id}>
+          {t.codigo}
+        </option>
+      ));
+    }
+
+    const cursosOrdenados = [...cursos].sort((a, b) =>
+      a.nome.localeCompare(b.nome),
+    );
+
+    return cursosOrdenados.map((curso) => {
+      const turmasDoCurso = turmas
+        .filter((t: any) => String(t.curso_id) === String(curso.id))
+        .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+
+      if (turmasDoCurso.length === 0) return null;
+
+      return (
+        <optgroup key={curso.id} label={curso.nome}>
+          {turmasDoCurso.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.codigo}
+            </option>
+          ))}
+        </optgroup>
+      );
+    });
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
       <div className="p-4 bg-gray-50 flex justify-between items-center border-b border-gray-200">
@@ -387,6 +461,17 @@ export default function ModoPlanilha({
                 classeLinha += " border-l-4 border-l-yellow-400";
               }
 
+              // Filtra as disciplinas baseadas na turma selecionada
+              const turmaSelecionadaObj = turmas.find(
+                (t: any) => String(t.id) === String(linha.turma_id),
+              );
+              const cursoId = turmaSelecionadaObj?.curso_id;
+              const disciplinasFiltradas = cursoId
+                ? disciplinas
+                    .filter((d: any) => String(d.curso_id) === String(cursoId))
+                    .sort((a: any, b: any) => a.nome.localeCompare(b.nome))
+                : [];
+
               return (
                 <tr
                   key={linha.id}
@@ -409,15 +494,12 @@ export default function ModoPlanilha({
                       }
                     >
                       <option value="">Selecione...</option>
-                      {turmas.map((t: any) => (
-                        <option key={t.id} value={t.id}>
-                          {t.codigo}
-                        </option>
-                      ))}
+                      {renderOpcoesTurmas()}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
                     <select
+                      disabled={!linha.turma_id}
                       value={linha.disciplina_id || ""}
                       onChange={(e) =>
                         atualizarCampo(
@@ -426,20 +508,28 @@ export default function ModoPlanilha({
                           e.target.value,
                         )
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={
                         disciplinas.find(
                           (d: any) =>
                             String(d.id) === String(linha.disciplina_id),
-                        )?.nome || "Selecione..."
+                        )?.nome || "Selecione a turma..."
                       }
                     >
-                      <option value="">Selecione...</option>
-                      {disciplinas.map((d: any) => (
-                        <option key={d.id} value={d.id}>
-                          {d.nome}
-                        </option>
-                      ))}
+                      {!linha.turma_id ? (
+                        <option value="">Selecione a turma...</option>
+                      ) : disciplinasFiltradas.length === 0 ? (
+                        <option value="">Nenhuma disciplina no curso...</option>
+                      ) : (
+                        <>
+                          <option value="">Selecione...</option>
+                          {disciplinasFiltradas.map((d: any) => (
+                            <option key={d.id} value={d.id}>
+                              {d.nome}
+                            </option>
+                          ))}
+                        </>
+                      )}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">

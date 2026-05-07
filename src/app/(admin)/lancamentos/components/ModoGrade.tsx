@@ -6,15 +6,15 @@ import { supabase } from "@/lib/supabase";
 export default function ModoGrade({
   aulas,
   turmas,
+  cursos = [], // Adicionado para permitir o agrupamento por curso
   professores,
   disciplinas,
   espacos,
   slots,
   recarregarAulas,
 }: any) {
-  const [filtroTurma, setFiltroTurma] = useState(
-    turmas.length > 0 ? turmas[0].id : "",
-  );
+  // Alterado para iniciar vazio, obrigando a seleção da turma
+  const [filtroTurma, setFiltroTurma] = useState("");
   const [modalAberto, setModalAberto] = useState(false);
   const [dadosModal, setDadosModal] = useState<any>(null);
   const [aulaCopiada, setAulaCopiada] = useState<any>(null);
@@ -313,6 +313,48 @@ export default function ModoGrade({
     (t: any) => String(t.id) === String(filtroTurma),
   );
 
+  // Filtra disciplinas baseadas no curso da turma selecionada
+  const disciplinasFiltradas = turmaAtualObj
+    ? disciplinas
+        .filter(
+          (d: any) => String(d.curso_id) === String(turmaAtualObj.curso_id),
+        )
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome))
+    : [];
+
+  // Função para renderizar as turmas agrupadas por curso
+  const renderOpcoesTurmas = () => {
+    if (!cursos || cursos.length === 0) {
+      return turmas.map((t: any) => (
+        <option key={t.id} value={t.id}>
+          {t.codigo}
+        </option>
+      ));
+    }
+
+    const cursosOrdenados = [...cursos].sort((a, b) =>
+      a.nome.localeCompare(b.nome),
+    );
+
+    return cursosOrdenados.map((curso) => {
+      const turmasDoCurso = turmas
+        .filter((t: any) => String(t.curso_id) === String(curso.id))
+        .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+
+      if (turmasDoCurso.length === 0) return null;
+
+      return (
+        <optgroup key={curso.id} label={curso.nome}>
+          {turmasDoCurso.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.codigo}
+            </option>
+          ))}
+        </optgroup>
+      );
+    });
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
       <div className="p-4 bg-gray-50 flex flex-wrap gap-4 items-center border-b border-gray-200">
@@ -337,14 +379,8 @@ export default function ModoGrade({
               setAulaCopiada(null);
             }}
           >
-            {turmas.length === 0 && (
-              <option value="">Nenhuma turma cadastrada</option>
-            )}
-            {turmas.map((t: any) => (
-              <option key={t.id} value={t.id}>
-                {t.codigo}
-              </option>
-            ))}
+            <option value="">Selecione uma turma...</option>
+            {renderOpcoesTurmas()}
           </select>
         </div>
       </div>
@@ -565,6 +601,7 @@ export default function ModoGrade({
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                     Disciplina
                   </label>
+                  {/* Select de Disciplina atualizado para considerar as regras de filtro */}
                   <select
                     required
                     className="w-full border rounded p-2 text-base outline-none focus:ring-2 focus:ring-green-500 bg-white"
@@ -576,12 +613,22 @@ export default function ModoGrade({
                       })
                     }
                   >
-                    <option value="">Selecione a disciplina...</option>
-                    {disciplinas.map((d: any) => (
-                      <option key={d.id} value={d.id}>
-                        {d.nome}
+                    {!filtroTurma ? (
+                      <option value="">Selecione o curso...</option>
+                    ) : disciplinasFiltradas.length === 0 ? (
+                      <option value="">
+                        Nenhuma disciplina cadastrada neste curso
                       </option>
-                    ))}
+                    ) : (
+                      <>
+                        <option value="">Selecione a disciplina...</option>
+                        {disciplinasFiltradas.map((d: any) => (
+                          <option key={d.id} value={d.id}>
+                            {d.nome}
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </select>
                 </div>
 
