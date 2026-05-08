@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function ModoPlanilha({
-  versaoId, // <-- NOVO: Recebendo a versão
+  versaoId,
   aulas,
   turmas,
   cursos = [],
@@ -21,64 +21,6 @@ export default function ModoPlanilha({
     return hora.substring(0, 5);
   };
 
-  useEffect(() => {
-    const linhasDoBanco = aulas.map((a: any) => ({ ...a }));
-
-    const mapaDiasOrdenacao: Record<string, number> = {
-      SEGUNDA: 1,
-      TERCA: 2,
-      QUARTA: 3,
-      QUINTA: 4,
-      SEXTA: 5,
-    };
-
-    linhasDoBanco.sort((a: any, b: any) => {
-      const turmaObjA = turmas.find(
-        (t: any) => String(t.id) === String(a.turma_id),
-      );
-      const turmaObjB = turmas.find(
-        (t: any) => String(t.id) === String(b.turma_id),
-      );
-
-      const cursoA = (
-        cursos.find((c: any) => String(c.id) === String(turmaObjA?.curso_id))
-          ?.nome || ""
-      ).toUpperCase();
-      const cursoB = (
-        cursos.find((c: any) => String(c.id) === String(turmaObjB?.curso_id))
-          ?.nome || ""
-      ).toUpperCase();
-
-      if (cursoA !== cursoB) return cursoA.localeCompare(cursoB);
-
-      const turmaNomeA = (turmaObjA?.codigo || "").toUpperCase();
-      const turmaNomeB = (turmaObjB?.codigo || "").toUpperCase();
-
-      if (turmaNomeA !== turmaNomeB)
-        return turmaNomeA.localeCompare(turmaNomeB);
-
-      const diaA = mapaDiasOrdenacao[a.dia_semana] || 99;
-      const diaB = mapaDiasOrdenacao[b.dia_semana] || 99;
-
-      if (diaA !== diaB) return diaA - diaB;
-
-      const slotObjA = slots.find(
-        (s: any) => String(s.id) === String(a.slot_horario_id),
-      );
-      const slotObjB = slots.find(
-        (s: any) => String(s.id) === String(b.slot_horario_id),
-      );
-
-      const horaA = slotObjA?.hora_inicio || "99:99";
-      const horaB = slotObjB?.hora_inicio || "99:99";
-
-      return horaA.localeCompare(horaB);
-    });
-
-    const linhasVazias = Array.from({ length: 5 }, () => criarLinhaVazia());
-    setLinhas([...linhasDoBanco, ...linhasVazias]);
-  }, [aulas, turmas, cursos, slots]);
-
   const criarLinhaVazia = () => ({
     id: crypto.randomUUID(),
     turma_id: "",
@@ -88,6 +30,92 @@ export default function ModoPlanilha({
     slot_horario_id: "",
     espaco_id: "",
   });
+
+  useEffect(() => {
+    const aulasMapeadas = aulas.map((a: any) => ({ ...a }));
+
+    const mapaDiasOrdenacao: Record<string, number> = {
+      SEGUNDA: 1,
+      TERCA: 2,
+      QUARTA: 3,
+      QUINTA: 4,
+      SEXTA: 5,
+    };
+
+    const ordenarInterno = (a: any, b: any) => {
+      const turmaObjA = turmas.find(
+        (t: any) => String(t.id) === String(a.turma_id),
+      );
+      const turmaObjB = turmas.find(
+        (t: any) => String(t.id) === String(b.turma_id),
+      );
+
+      const turmaNomeA = (turmaObjA?.codigo || "").toUpperCase();
+      const turmaNomeB = (turmaObjB?.codigo || "").toUpperCase();
+      if (turmaNomeA !== turmaNomeB)
+        return turmaNomeA.localeCompare(turmaNomeB);
+
+      const diaA = mapaDiasOrdenacao[a.dia_semana] || 99;
+      const diaB = mapaDiasOrdenacao[b.dia_semana] || 99;
+      if (diaA !== diaB) return diaA - diaB;
+
+      const slotObjA = slots.find(
+        (s: any) => String(s.id) === String(a.slot_horario_id),
+      );
+      const slotObjB = slots.find(
+        (s: any) => String(s.id) === String(b.slot_horario_id),
+      );
+      const horaA = slotObjA?.hora_inicio || "99:99";
+      const horaB = slotObjB?.hora_inicio || "99:99";
+      return horaA.localeCompare(horaB);
+    };
+
+    const novasLinhas: any[] = [];
+    const cursosOrdenados = [...cursos].sort((a: any, b: any) =>
+      (a.nome || "").localeCompare(b.nome || ""),
+    );
+
+    cursosOrdenados.forEach((curso: any) => {
+      const aulasDesteCurso = aulasMapeadas.filter((a: any) => {
+        const t = turmas.find(
+          (turma: any) => String(turma.id) === String(a.turma_id),
+        );
+        return String(t?.curso_id) === String(curso.id);
+      });
+
+      // ADICIONA AS AULAS E AS 2 LINHAS EXTRAS APENAS SE O CURSO JÁ TIVER AULAS
+      if (aulasDesteCurso.length > 0) {
+        aulasDesteCurso.sort(ordenarInterno);
+        novasLinhas.push(...aulasDesteCurso);
+        novasLinhas.push(criarLinhaVazia());
+        novasLinhas.push(criarLinhaVazia());
+      }
+    });
+
+    const aulasSemCurso = aulasMapeadas.filter((a: any) => {
+      const t = turmas.find(
+        (turma: any) => String(turma.id) === String(a.turma_id),
+      );
+      return (
+        !t?.curso_id ||
+        !cursos.some((c: any) => String(c.id) === String(t.curso_id))
+      );
+    });
+
+    if (aulasSemCurso.length > 0) {
+      aulasSemCurso.sort(ordenarInterno);
+      novasLinhas.push(...aulasSemCurso);
+      novasLinhas.push(criarLinhaVazia());
+      novasLinhas.push(criarLinhaVazia());
+    }
+
+    // Se o banco estiver 100% vazio (nenhuma aula em nenhum curso), adiciona 5 linhas iniciais
+    if (novasLinhas.length === 0) {
+      for (let i = 0; i < 5; i++) novasLinhas.push(criarLinhaVazia());
+    }
+
+    setLinhas(novasLinhas);
+  }, [aulas, turmas, cursos, slots]);
 
   const adicionarLinha = () => setLinhas([...linhas, criarLinhaVazia()]);
 
@@ -142,7 +170,7 @@ export default function ModoPlanilha({
   const salvarLinhaNoBanco = async (linha: any) => {
     const payload = {
       id: linha.id,
-      versao_id: versaoId, // <-- NOVO: Injetando a versão no salvamento
+      versao_id: versaoId,
       turma_id: linha.turma_id,
       disciplina_id: linha.disciplina_id,
       professor_id: linha.professor_id === "" ? null : linha.professor_id,
@@ -167,7 +195,7 @@ export default function ModoPlanilha({
 
   const calcularConflitos = () => {
     const conflitos = new Map<string, string[]>();
-    const linhasValidas = linhas.filter((l) => l.dia_semana);
+    const linhasValidas = linhas.filter((l) => l.dia_semana && l.turma_id);
 
     const getSlot = (id: string) =>
       slots.find((s: any) => String(s.id) === String(id));
@@ -335,38 +363,23 @@ export default function ModoPlanilha({
 
   const obterCorDoBanco = (turmaId: string) => {
     if (!turmaId) return "";
-
     const turmaObj = turmas.find((t: any) => String(t.id) === String(turmaId));
     if (!turmaObj || !turmaObj.curso_id) return "";
-
     const cursoObj = cursos.find(
       (c: any) => String(c.id) === String(turmaObj.curso_id),
     );
-    if (!cursoObj || !cursoObj.cor_identificacao) return "";
-
-    return cursoObj.cor_identificacao;
+    return cursoObj?.cor_identificacao || "";
   };
 
   const renderOpcoesTurmas = () => {
-    if (!cursos || cursos.length === 0) {
-      return turmas.map((t: any) => (
-        <option key={t.id} value={t.id}>
-          {t.codigo}
-        </option>
-      ));
-    }
-
     const cursosOrdenados = [...cursos].sort((a, b) =>
       a.nome.localeCompare(b.nome),
     );
-
     return cursosOrdenados.map((curso) => {
       const turmasDoCurso = turmas
         .filter((t: any) => String(t.curso_id) === String(curso.id))
         .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
-
       if (turmasDoCurso.length === 0) return null;
-
       return (
         <optgroup key={curso.id} label={curso.nome}>
           {turmasDoCurso.map((t: any) => (
@@ -387,15 +400,15 @@ export default function ModoPlanilha({
             Edição em Lote (Planilha)
           </h2>
           <p className="text-sm text-gray-500">
-            O salvamento é automático ao preencher turma, disciplina, dia e
-            horário.
+            Aulas agrupadas por curso. Use as linhas vazias entre os blocos para
+            novos lançamentos.
           </p>
         </div>
         <button
           onClick={adicionarLinha}
           className="bg-green-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2"
         >
-          <span className="text-lg leading-none">+</span> Nova Linha
+          <span className="text-lg leading-none">+</span> Nova Linha Final
         </button>
       </div>
 
@@ -423,29 +436,24 @@ export default function ModoPlanilha({
                 linha.disciplina_id ||
                 linha.professor_id ||
                 linha.dia_semana ||
-                linha.slot_horario_id ||
-                linha.espaco_id;
+                linha.slot_horario_id;
               const estaCompleta =
                 linha.turma_id &&
                 linha.disciplina_id &&
                 linha.dia_semana &&
                 linha.slot_horario_id;
               const linhaRascunho = temDado && !estaCompleta;
-
               const erros = mapaDeConflitos.get(linha.id) || [];
               const temConflito = erros.length > 0;
-
               const corHexadecimal = obterCorDoBanco(linha.turma_id);
 
               let classeLinha =
                 "border-b transition-all group hover:brightness-95 ";
-
-              if (temConflito) {
+              if (temConflito)
                 classeLinha +=
                   " outline outline-2 outline-offset-[-2px] outline-red-600 z-10 relative";
-              } else if (linhaRascunho) {
+              else if (linhaRascunho)
                 classeLinha += " border-l-4 border-l-yellow-400";
-              }
 
               const turmaSelecionadaObj = turmas.find(
                 (t: any) => String(t.id) === String(linha.turma_id),
@@ -472,11 +480,6 @@ export default function ModoPlanilha({
                         atualizarCampo(linha.id, "turma_id", e.target.value)
                       }
                       className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800"
-                      title={
-                        turmas.find(
-                          (t: any) => String(t.id) === String(linha.turma_id),
-                        )?.codigo || "Selecione..."
-                      }
                     >
                       <option value="">Selecione...</option>
                       {renderOpcoesTurmas()}
@@ -493,28 +496,14 @@ export default function ModoPlanilha({
                           e.target.value,
                         )
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={
-                        disciplinas.find(
-                          (d: any) =>
-                            String(d.id) === String(linha.disciplina_id),
-                        )?.nome || "Selecione a turma..."
-                      }
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800 disabled:opacity-50"
                     >
-                      {!linha.turma_id ? (
-                        <option value="">Selecione a turma...</option>
-                      ) : disciplinasFiltradas.length === 0 ? (
-                        <option value="">Nenhuma disciplina no curso...</option>
-                      ) : (
-                        <>
-                          <option value="">Selecione...</option>
-                          {disciplinasFiltradas.map((d: any) => (
-                            <option key={d.id} value={d.id}>
-                              {d.nome}
-                            </option>
-                          ))}
-                        </>
-                      )}
+                      <option value="">Selecione...</option>
+                      {disciplinasFiltradas.map((d: any) => (
+                        <option key={d.id} value={d.id}>
+                          {d.nome}
+                        </option>
+                      ))}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
@@ -523,13 +512,7 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "professor_id", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none text-gray-700 font-medium"
-                      title={
-                        professores.find(
-                          (p: any) =>
-                            String(p.id) === String(linha.professor_id),
-                        )?.nome || "Selecione..."
-                      }
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
                     >
                       <option value="">(Nenhum)</option>
                       {professores.map((p: any) => (
@@ -545,7 +528,7 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "dia_semana", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none text-gray-700 font-medium"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
                     >
                       <option value="">Selecione...</option>
                       <option value="SEGUNDA">Segunda-feira</option>
@@ -565,7 +548,7 @@ export default function ModoPlanilha({
                           e.target.value,
                         )
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none text-gray-700 font-medium"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
                     >
                       <option value="">Selecione...</option>
                       {slots.map((s: any) => (
@@ -582,12 +565,7 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "espaco_id", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none text-gray-700 font-medium"
-                      title={
-                        espacos.find(
-                          (e: any) => String(e.id) === String(linha.espaco_id),
-                        )?.nome || "Selecione..."
-                      }
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
                     >
                       <option value="">(Nenhum)</option>
                       {espacos.map((e: any) => (
@@ -597,11 +575,11 @@ export default function ModoPlanilha({
                       ))}
                     </select>
                   </td>
-                  <td className="p-2 text-center transition-colors">
-                    <div className="flex items-center justify-center gap-2 relative">
+                  <td className="p-2 text-center">
+                    <div className="flex items-center justify-center gap-2">
                       {temConflito && (
                         <span
-                          className="text-red-600 font-bold cursor-help text-lg animate-pulse bg-white/50 rounded-full w-6 h-6 flex items-center justify-center shadow-sm"
+                          className="text-red-600 font-bold cursor-help text-lg animate-pulse"
                           title={erros?.join("\n")}
                         >
                           ⚠️
@@ -609,15 +587,13 @@ export default function ModoPlanilha({
                       )}
                       <button
                         onClick={() => duplicarLinha(linha.id)}
-                        className="text-blue-600/60 hover:text-blue-700 hover:bg-white/50 font-bold px-1.5 py-1 rounded text-lg transition-colors"
-                        title="Duplicar linha (Aulas Geminadas)"
+                        className="text-blue-600/60 hover:text-blue-700 font-bold px-1.5 py-1 rounded text-lg"
                       >
                         ⧉
                       </button>
                       <button
                         onClick={() => removerLinha(linha.id)}
-                        className="text-red-600/60 hover:text-red-700 hover:bg-white/50 font-bold px-1.5 py-1 rounded transition-colors"
-                        title="Remover linha"
+                        className="text-red-600/60 hover:text-red-700 font-bold px-1.5 py-1 rounded"
                       >
                         ✕
                       </button>

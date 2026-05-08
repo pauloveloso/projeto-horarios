@@ -11,6 +11,7 @@ export default function GestaoVersoesPage() {
   const [modalAgendar, setModalAgendar] = useState(false);
   const [modalNovoRascunho, setModalNovoRascunho] = useState(false);
   const [modalEditar, setModalEditar] = useState(false);
+  const [modalRecarregar, setModalRecarregar] = useState(false);
 
   // Dados temporários para os modais
   const [versaoAlvo, setVersaoAlvo] = useState<any>(null);
@@ -21,6 +22,7 @@ export default function GestaoVersoesPage() {
     semestre: "",
   });
   const [novoRascunho, setNovoRascunho] = useState({ nome: "", semestre: "" });
+  const [idVersaoOrigemRecarregar, setIdVersaoOrigemRecarregar] = useState("");
 
   const carregarVersoes = async () => {
     setCarregando(true);
@@ -42,7 +44,6 @@ export default function GestaoVersoesPage() {
     carregarVersoes();
   }, []);
 
-  // 1. Criar Rascunho Inicial
   const criarRascunho = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase.from("versoes_grade").insert({
@@ -60,7 +61,6 @@ export default function GestaoVersoesPage() {
     }
   };
 
-  // 2. Salvar Edição de Nome/Semestre (Apenas para Rascunho)
   const salvarEdicao = async (e: React.FormEvent) => {
     e.preventDefault();
     const { error } = await supabase
@@ -76,46 +76,70 @@ export default function GestaoVersoesPage() {
     }
   };
 
-  // 3. Clonar Aulas
-  const clonarGradeAnterior = async (idRascunho: string) => {
+  // FUNÇÃO CORRIGIDA: Exclui primeiro as aulas filhas, depois exclui a versão pai
+  const excluirVersao = async (id: string) => {
     if (
       !confirm(
-        "Isso vai apagar qualquer aula neste rascunho e copiar as aulas da versão atual. Continuar?",
+        "Tem certeza que deseja excluir este rascunho? Esta ação não pode ser desfeita e todas as aulas vinculadas a ele serão apagadas.",
       )
     )
       return;
 
-    const hoje = new Date().toISOString().split("T")[0];
-    const versaoAtual = versoes.find(
-      (v) => v.status === "PUBLICADA" && v.data_inicio_vigencia <= hoje,
-    );
+    try {
+      // 1. Exclui as aulas associadas a este rascunho (evita o erro de Foreign Key)
+      const { error: erroAulas } = await supabase
+        .from("aulas")
+        .delete()
+        .eq("versao_id", id);
+      if (erroAulas) throw erroAulas;
 
-    if (!versaoAtual) {
-      alert("Nenhuma versão publicada encontrada para copiar.");
-      return;
+      // 2. Exclui o rascunho em si
+      const { error: erroVersao } = await supabase
+        .from("versoes_grade")
+        .delete()
+        .eq("id", id);
+      if (erroVersao) throw erroVersao;
+
+      carregarVersoes();
+    } catch (error: any) {
+      alert("Erro ao excluir: " + error.message);
     }
+  };
+
+  const executarRecarregar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!idVersaoOrigemRecarregar || !versaoAlvo) return;
+
+    if (
+      !confirm(
+        "Isso vai apagar qualquer aula neste rascunho e copiar as aulas da versão selecionada. Continuar?",
+      )
+    )
+      return;
 
     try {
-      await supabase.from("aulas").delete().eq("versao_id", idRascunho);
-      const { data: aulasAntigas } = await supabase
+      await supabase.from("aulas").delete().eq("versao_id", versaoAlvo.id);
+      const { data: aulasOrigem } = await supabase
         .from("aulas")
         .select("*")
-        .eq("versao_id", versaoAtual.id);
+        .eq("versao_id", idVersaoOrigemRecarregar);
 
-      if (aulasAntigas && aulasAntigas.length > 0) {
-        const copias = aulasAntigas.map((aula) => {
+      if (aulasOrigem && aulasOrigem.length > 0) {
+        const copias = aulasOrigem.map((aula) => {
           const { id, criado_em, ...resto } = aula;
-          return { ...resto, versao_id: idRascunho };
+          return { ...resto, versao_id: versaoAlvo.id };
         });
         await supabase.from("aulas").insert(copias);
         alert("Dados recarregados com sucesso!");
       }
+      setModalRecarregar(false);
+      setIdVersaoOrigemRecarregar("");
+      carregarVersoes();
     } catch (error) {
-      alert("Erro ao clonar a grade.");
+      alert("Erro ao recarregar a grade.");
     }
   };
 
-  // 4. Publicar/Agendar
   const agendarPublicacao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!versaoAlvo || !dataVigencia) return;
@@ -129,7 +153,6 @@ export default function GestaoVersoesPage() {
         })
         .eq("id", versaoAlvo.id);
 
-      // Gera o próximo rascunho automático em branco
       await supabase.from("versoes_grade").insert({
         nome: "Novo Rascunho",
         semestre: versaoAlvo.semestre,
@@ -141,6 +164,43 @@ export default function GestaoVersoesPage() {
       alert("Versão agendada com sucesso!");
     } catch (error) {
       alert("Erro ao agendar.");
+    }
+  };
+
+  // FUNÇÃO CORRIGIDA: Também previne o erro de chave estrangeira ao descartar rascunhos extras
+  const cancelarAgendamento = async (versaoPrevia: any) => {
+    if (
+      !confirm(
+        "Deseja cancelar o agendamento desta prévia? Ela voltará a ser o rascunho editável e os rascunhos vazios atuais serão descartados.",
+      )
+    )
+      return;
+
+    try {
+      const rascunhosExistentes = versoes.filter(
+        (v) => v.status === "RASCUNHO",
+      );
+
+      if (rascunhosExistentes.length > 0) {
+        const idsParaDeletar = rascunhosExistentes.map((r) => r.id);
+        // 1. Limpa as aulas de todos os rascunhos existentes
+        await supabase.from("aulas").delete().in("versao_id", idsParaDeletar);
+        // 2. Limpa os rascunhos em si
+        await supabase.from("versoes_grade").delete().in("id", idsParaDeletar);
+      }
+
+      await supabase
+        .from("versoes_grade")
+        .update({
+          status: "RASCUNHO",
+          data_inicio_vigencia: null,
+        })
+        .eq("id", versaoPrevia.id);
+
+      carregarVersoes();
+      alert("Agendamento cancelado com sucesso!");
+    } catch (error: any) {
+      alert("Erro ao cancelar agendamento: " + error.message);
     }
   };
 
@@ -165,8 +225,7 @@ export default function GestaoVersoesPage() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      {/* CABEÇALHO */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center mt-6">
         <div>
           <h1 className="text-2xl font-black text-green-800">
             Controle de Versões
@@ -186,7 +245,6 @@ export default function GestaoVersoesPage() {
         )}
       </div>
 
-      {/* TABELA DE VERSÕES */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -201,6 +259,7 @@ export default function GestaoVersoesPage() {
             {versoes.map((versao) => {
               let badgeClass = "bg-gray-100 text-gray-600";
               let labelStatus = "ARQUIVADA";
+              let isPrevia = false;
 
               if (versao.status === "RASCUNHO") {
                 badgeClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
@@ -209,6 +268,7 @@ export default function GestaoVersoesPage() {
                 if (versao.data_inicio_vigencia > hoje) {
                   badgeClass = "bg-blue-100 text-blue-800 border-blue-200";
                   labelStatus = "AGENDADA (PRÉVIA)";
+                  isPrevia = true;
                 } else {
                   const atual = versoes.find(
                     (v) =>
@@ -245,22 +305,36 @@ export default function GestaoVersoesPage() {
                   </td>
                   <td className="p-4 text-right space-x-2">
                     {versao.status === "RASCUNHO" && (
+                      <button
+                        onClick={() => excluirVersao(versao.id)}
+                        className="text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition-colors"
+                        title="Excluir Rascunho Permanentemente"
+                      >
+                        🗑️
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setDadosEdicao({
+                          id: versao.id,
+                          nome: versao.nome,
+                          semestre: versao.semestre,
+                        });
+                        setModalEditar(true);
+                      }}
+                      className="text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded transition-colors"
+                    >
+                      ✏️ Editar Info
+                    </button>
+
+                    {versao.status === "RASCUNHO" && (
                       <>
                         <button
                           onClick={() => {
-                            setDadosEdicao({
-                              id: versao.id,
-                              nome: versao.nome,
-                              semestre: versao.semestre,
-                            });
-                            setModalEditar(true);
+                            setVersaoAlvo(versao);
+                            setModalRecarregar(true);
                           }}
-                          className="text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded transition-colors"
-                        >
-                          ✏️ Editar Info
-                        </button>
-                        <button
-                          onClick={() => clonarGradeAnterior(versao.id)}
                           className="text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors"
                         >
                           🔄 Recarregar
@@ -276,6 +350,15 @@ export default function GestaoVersoesPage() {
                         </button>
                       </>
                     )}
+
+                    {isPrevia && (
+                      <button
+                        onClick={() => cancelarAgendamento(versao)}
+                        className="text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded transition-colors"
+                      >
+                        🚫 Cancelar Prévia
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -284,46 +367,81 @@ export default function GestaoVersoesPage() {
         </table>
       </div>
 
-      {/* MODAL: EDITAR RASCUNHO */}
+      {modalRecarregar && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <form onSubmit={executarRecarregar}>
+              <div className="bg-blue-800 text-white px-6 py-4 font-bold">
+                Recarregar Dados
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Selecione a versão de origem para copiar as aulas:
+                </p>
+                <select
+                  required
+                  value={idVersaoOrigemRecarregar}
+                  onChange={(e) => setIdVersaoOrigemRecarregar(e.target.value)}
+                  className="w-full border rounded p-2 outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">Selecione...</option>
+                  {versoes
+                    .filter((v) => v.id !== versaoAlvo.id)
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.nome} - {v.semestre} ({v.status})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setModalRecarregar(false)}
+                  className="px-4 py-2 text-gray-500 text-sm font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-700 text-white px-5 py-2 rounded text-sm font-bold"
+                >
+                  Confirmar Cópia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {modalEditar && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <form onSubmit={salvarEdicao}>
               <div className="bg-gray-800 text-white px-6 py-4 font-bold">
-                Editar Dados do Rascunho
+                Editar Dados da Versão
               </div>
               <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Nome da Versão
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={dadosEdicao.nome}
-                    onChange={(e) =>
-                      setDadosEdicao({ ...dadosEdicao, nome: e.target.value })
-                    }
-                    className="w-full border rounded p-2 outline-none focus:ring-2 focus:ring-gray-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Semestre
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    value={dadosEdicao.semestre}
-                    onChange={(e) =>
-                      setDadosEdicao({
-                        ...dadosEdicao,
-                        semestre: e.target.value,
-                      })
-                    }
-                    className="w-full border rounded p-2 outline-none focus:ring-2 focus:ring-gray-400"
-                  />
-                </div>
+                <input
+                  required
+                  type="text"
+                  value={dadosEdicao.nome}
+                  onChange={(e) =>
+                    setDadosEdicao({ ...dadosEdicao, nome: e.target.value })
+                  }
+                  className="w-full border rounded p-2"
+                  placeholder="Nome"
+                />
+                <input
+                  required
+                  type="text"
+                  value={dadosEdicao.semestre}
+                  onChange={(e) =>
+                    setDadosEdicao({ ...dadosEdicao, semestre: e.target.value })
+                  }
+                  className="w-full border rounded p-2"
+                  placeholder="Semestre"
+                />
               </div>
               <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
                 <button
@@ -337,7 +455,7 @@ export default function GestaoVersoesPage() {
                   type="submit"
                   className="bg-gray-800 text-white px-5 py-2 rounded text-sm font-bold"
                 >
-                  Salvar Alterações
+                  Salvar
                 </button>
               </div>
             </form>
@@ -345,30 +463,21 @@ export default function GestaoVersoesPage() {
         </div>
       )}
 
-      {/* MODAL: AGENDAR PUBLICAÇÃO */}
       {modalAgendar && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <form onSubmit={agendarPublicacao}>
-              <div className="bg-green-800 text-white px-6 py-4">
-                <h3 className="font-bold text-lg">Agendar Publicação</h3>
-                <p className="text-xs text-green-200 mt-1">
-                  Defina quando o novo horário entrará em vigor.
-                </p>
+              <div className="bg-green-800 text-white px-6 py-4 font-bold">
+                Agendar Publicação
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
-                    Data de Início da Vigência
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={dataVigencia}
-                    onChange={(e) => setDataVigencia(e.target.value)}
-                    className="w-full border border-gray-300 rounded p-2 outline-none focus:ring-2 focus:ring-green-500 font-medium"
-                  />
-                </div>
+              <div className="p-6">
+                <input
+                  type="date"
+                  required
+                  value={dataVigencia}
+                  onChange={(e) => setDataVigencia(e.target.value)}
+                  className="w-full border rounded p-2"
+                />
               </div>
               <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
                 <button
@@ -390,7 +499,6 @@ export default function GestaoVersoesPage() {
         </div>
       )}
 
-      {/* MODAL: NOVO RASCUNHO */}
       {modalNovoRascunho && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
@@ -399,39 +507,29 @@ export default function GestaoVersoesPage() {
                 Criar Rascunho Inicial
               </div>
               <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Nome da Versão
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="Ex: Horário 2024.2"
-                    value={novoRascunho.nome}
-                    onChange={(e) =>
-                      setNovoRascunho({ ...novoRascunho, nome: e.target.value })
-                    }
-                    className="w-full border rounded p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Semestre
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="Ex: 2024.2"
-                    value={novoRascunho.semestre}
-                    onChange={(e) =>
-                      setNovoRascunho({
-                        ...novoRascunho,
-                        semestre: e.target.value,
-                      })
-                    }
-                    className="w-full border rounded p-2"
-                  />
-                </div>
+                <input
+                  required
+                  type="text"
+                  placeholder="Nome Ex: 2024.2"
+                  value={novoRascunho.nome}
+                  onChange={(e) =>
+                    setNovoRascunho({ ...novoRascunho, nome: e.target.value })
+                  }
+                  className="w-full border rounded p-2"
+                />
+                <input
+                  required
+                  type="text"
+                  placeholder="Semestre"
+                  value={novoRascunho.semestre}
+                  onChange={(e) =>
+                    setNovoRascunho({
+                      ...novoRascunho,
+                      semestre: e.target.value,
+                    })
+                  }
+                  className="w-full border rounded p-2"
+                />
               </div>
               <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t">
                 <button

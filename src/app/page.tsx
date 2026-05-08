@@ -6,8 +6,8 @@ import Link from "next/link";
 
 export default function HomePage() {
   const [carregando, setCarregando] = useState(true);
+  const [logado, setLogado] = useState(false);
 
-  // Estados para Controle de Versão
   const [versoes, setVersoes] = useState<any[]>([]);
   const [versaoSelecionada, setVersaoSelecionada] = useState<string>("");
 
@@ -35,18 +35,31 @@ export default function HomePage() {
     { id: "SEXTA", nome: "Sexta" },
   ];
 
-  // 1. Carrega as Versões Disponíveis
   useEffect(() => {
     async function carregarVersoes() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const isLogado = !!session;
+      setLogado(isLogado);
+
       const { data } = await supabase
         .from("versoes_grade")
         .select("*")
         .order("data_inicio_vigencia", { ascending: false });
 
       if (data && data.length > 0) {
-        setVersoes(data);
-        const ativa = data.find((v) => v.status === "PUBLICADA") || data[0];
-        setVersaoSelecionada(ativa.id);
+        const versoesFiltradas = isLogado
+          ? data
+          : data.filter((v) => v.status !== "RASCUNHO");
+        setVersoes(versoesFiltradas);
+
+        const hoje = new Date().toISOString().split("T")[0];
+        const ativa =
+          versoesFiltradas.find(
+            (v) => v.status === "PUBLICADA" && v.data_inicio_vigencia <= hoje,
+          ) || versoesFiltradas[0];
+        if (ativa) setVersaoSelecionada(ativa.id);
       } else {
         setCarregando(false);
       }
@@ -54,10 +67,8 @@ export default function HomePage() {
     carregarVersoes();
   }, []);
 
-  // 2. Carrega as Aulas Baseadas na Versão Escolhida
   useEffect(() => {
     if (!versaoSelecionada) return;
-
     async function carregarTudo() {
       setCarregando(true);
       try {
@@ -71,7 +82,6 @@ export default function HomePage() {
           { data: categorias },
           { data: slots },
         ] = await Promise.all([
-          // Busca APENAS as aulas da versão selecionada
           supabase.from("aulas").select("*").eq("versao_id", versaoSelecionada),
           supabase.from("turmas").select("*").order("codigo"),
           supabase.from("cursos").select("*").order("nome"),
@@ -81,7 +91,6 @@ export default function HomePage() {
           supabase.from("categorias_espacos").select("*").order("nome"),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
         ]);
-
         setDados({
           aulas: aulas || [],
           turmas,
@@ -93,7 +102,7 @@ export default function HomePage() {
           slots,
         });
       } catch (error) {
-        console.error("Erro ao carregar dados:", error);
+        console.error(error);
       } finally {
         setCarregando(false);
       }
@@ -102,7 +111,6 @@ export default function HomePage() {
   }, [versaoSelecionada]);
 
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
-
   const formatarData = (dataStr: string) => {
     if (!dataStr) return "";
     const data = new Date(dataStr);
@@ -111,7 +119,6 @@ export default function HomePage() {
     ).toLocaleDateString("pt-BR");
   };
 
-  // Agrupamento lógico por Turnos
   const turnos = [
     {
       nome: "Manhã",
@@ -128,43 +135,6 @@ export default function HomePage() {
       slots: dados.slots.filter((s: any) => s.hora_inicio >= "18:00"),
     },
   ];
-
-  // Renderização de opções agrupadas (UX)
-  const renderOpcoesTurmas = () => {
-    return dados.cursos.map((curso: any) => {
-      const turmasDoCurso = dados.turmas.filter(
-        (t: any) => String(t.curso_id) === String(curso.id),
-      );
-      if (turmasDoCurso.length === 0) return null;
-      return (
-        <optgroup key={curso.id} label={curso.nome}>
-          {turmasDoCurso.map((t: any) => (
-            <option key={t.id} value={t.id}>
-              {t.codigo}
-            </option>
-          ))}
-        </optgroup>
-      );
-    });
-  };
-
-  const renderOpcoesEspacos = () => {
-    return dados.categorias.map((cat: any) => {
-      const espacosDaCat = dados.espacos.filter(
-        (e: any) => String(e.categoria_id) === String(cat.id),
-      );
-      if (espacosDaCat.length === 0) return null;
-      return (
-        <optgroup key={cat.id} label={cat.nome}>
-          {espacosDaCat.map((e: any) => (
-            <option key={e.id} value={e.id}>
-              {e.nome}
-            </option>
-          ))}
-        </optgroup>
-      );
-    });
-  };
 
   const obterTituloGrade = () => {
     if (!idSelecionado) return "";
@@ -191,43 +161,67 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-white pb-10">
-      {/* HEADER - OCULTO NA IMPRESSÃO */}
       <header className="bg-green-800 text-white p-6 shadow-md print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div>
-            <h1 className="text-2xl font-black italic tracking-tighter">
-              SGH{" "}
-              <span className="font-light not-italic text-green-200">
-                | IFNMG
-              </span>
-            </h1>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
-              <p className="text-sm font-medium text-green-100 uppercase tracking-widest">
-                Portal de Horários
-              </p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-black italic tracking-tighter">
+                SGH{" "}
+                <span className="font-light not-italic text-green-200">
+                  | IFNMG
+                </span>
+              </h1>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-1">
+                <p className="text-sm font-medium text-green-100 uppercase tracking-widest">
+                  Portal de Horários
+                </p>
 
-              {/* SELETOR DE VERSÃO - Discreto, ao lado do nome do portal */}
-              {versoes.length > 0 && (
-                <select
-                  value={versaoSelecionada}
-                  onChange={(e) => {
-                    setVersaoSelecionada(e.target.value);
-                    setIdSelecionado("");
-                  }}
-                  className="bg-green-900 text-green-100 text-[11px] font-bold uppercase rounded border border-green-700 px-2 py-1 outline-none cursor-pointer hover:bg-green-700 transition-colors"
-                >
-                  {versoes.map((v) => (
-                    <option
-                      key={v.id}
-                      value={v.id}
-                      className="bg-white text-gray-800"
-                    >
-                      {v.nome} - {v.semestre}{" "}
-                      {v.status === "PUBLICADA" ? "(Atual)" : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
+                {versoes.length > 0 && (
+                  <select
+                    value={versaoSelecionada}
+                    onChange={(e) => {
+                      setVersaoSelecionada(e.target.value);
+                      setIdSelecionado("");
+                    }}
+                    className="bg-green-900 text-green-100 text-[11px] font-bold uppercase rounded border border-green-700 px-2 py-1 outline-none cursor-pointer hover:bg-green-700 transition-colors"
+                  >
+                    {versoes.map((v) => {
+                      const hoje = new Date().toISOString().split("T")[0];
+                      let sufixo = "";
+
+                      if (v.status === "RASCUNHO") {
+                        sufixo = "(Rascunho)";
+                      } else if (v.status === "PUBLICADA") {
+                        if (v.data_inicio_vigencia > hoje) {
+                          sufixo = "(Prévia)";
+                        } else {
+                          // Como a lista vem do Supabase ordenada por data DESC,
+                          // a primeira versão PUBLICADA com data <= hoje é a ATUAL.
+                          const atual = versoes.find(
+                            (ver) =>
+                              ver.status === "PUBLICADA" &&
+                              ver.data_inicio_vigencia <= hoje,
+                          );
+                          sufixo =
+                            atual && atual.id === v.id
+                              ? "(Atual)"
+                              : "(Arquivada)";
+                        }
+                      }
+
+                      return (
+                        <option
+                          key={v.id}
+                          value={v.id}
+                          className="bg-white text-gray-800"
+                        >
+                          {v.nome} - {v.semestre} {sufixo}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
             </div>
           </div>
 
@@ -250,23 +244,51 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-
             <select
               value={idSelecionado}
               onChange={(e) => setIdSelecionado(e.target.value)}
               className="bg-white text-gray-800 rounded-lg p-2 text-sm font-bold outline-none border-none w-full sm:w-[280px] shadow-inner truncate"
             >
               <option value="">Escolha...</option>
-              {tipoFiltro === "TURMA" && renderOpcoesTurmas()}
+              {tipoFiltro === "TURMA" &&
+                dados.cursos.map((curso: any) => {
+                  const turmasDoCurso = dados.turmas.filter(
+                    (t: any) => String(t.curso_id) === String(curso.id),
+                  );
+                  if (turmasDoCurso.length === 0) return null;
+                  return (
+                    <optgroup key={curso.id} label={curso.nome}>
+                      {turmasDoCurso.map((t: any) => (
+                        <option key={t.id} value={t.id}>
+                          {t.codigo}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
               {tipoFiltro === "PROFESSOR" &&
                 dados.professores.map((p: any) => (
                   <option key={p.id} value={p.id}>
                     {p.nome}
                   </option>
                 ))}
-              {tipoFiltro === "ESPACO" && renderOpcoesEspacos()}
+              {tipoFiltro === "ESPACO" &&
+                dados.categorias.map((cat: any) => {
+                  const espacosDaCat = dados.espacos.filter(
+                    (e: any) => String(e.categoria_id) === String(cat.id),
+                  );
+                  if (espacosDaCat.length === 0) return null;
+                  return (
+                    <optgroup key={cat.id} label={cat.nome}>
+                      {espacosDaCat.map((e: any) => (
+                        <option key={e.id} value={e.id}>
+                          {e.nome}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                })}
             </select>
-
             <button
               onClick={() => window.print()}
               disabled={!idSelecionado}
@@ -278,15 +300,12 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ÁREA DA GRADE */}
       <main className="max-w-7xl mx-auto mt-6 p-2 relative">
-        {/* Loading overlay discreto ao trocar de versão */}
         {carregando && idSelecionado && (
           <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
             <div className="w-10 h-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
         )}
-
         {!idSelecionado ? (
           <div className="h-[60vh] flex flex-col items-center justify-center text-gray-300 border-4 border-dashed border-gray-100 rounded-3xl">
             <span className="text-8xl mb-4">📅</span>
@@ -296,28 +315,22 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="space-y-6 print:space-y-0">
-            {/* Título da Grade com Data da Versão */}
             <div className="text-center py-4 print:py-0 print:mb-4">
               <h2 className="text-3xl font-black text-gray-800 uppercase print:text-xl">
                 {obterTituloGrade()}
               </h2>
-
-              {/* Data da versão integrada elegantemente ao título */}
               {infoVersao && (
                 <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mt-1">
                   Vigência: A partir de{" "}
                   {formatarData(infoVersao.data_inicio_vigencia)}
+                  {infoVersao.status === "RASCUNHO" && (
+                    <span className="text-yellow-600 ml-2">
+                      (Modo Rascunho)
+                    </span>
+                  )}
                 </p>
               )}
-
-              <div className="hidden print:block text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">
-                IFNMG Campus Januária • Gerado em{" "}
-                {new Date().toLocaleDateString("pt-BR")} às{" "}
-                {new Date().toLocaleTimeString("pt-BR")}
-              </div>
             </div>
-
-            {/* TABELAS POR TURNO */}
             {turnos.map(
               (turno, index) =>
                 turno.slots.length > 0 && (
@@ -357,31 +370,21 @@ export default function HomePage() {
                                 {formatarHora(slot.hora_fim)}
                               </div>
                             </td>
-
                             {diasSemana.map((dia) => {
-                              // Mantido slot_horario_id original da sua tabela aulas
-                              const aula = dados.aulas.find((a: any) => {
-                                const mesmoTempo =
+                              const aula = dados.aulas.find(
+                                (a: any) =>
                                   a.dia_semana === dia.id &&
-                                  String(a.slot_horario_id) === String(slot.id);
-                                if (!mesmoTempo) return false;
-                                if (tipoFiltro === "TURMA")
-                                  return (
-                                    String(a.turma_id) === String(idSelecionado)
-                                  );
-                                if (tipoFiltro === "PROFESSOR")
-                                  return (
-                                    String(a.professor_id) ===
-                                    String(idSelecionado)
-                                  );
-                                if (tipoFiltro === "ESPACO")
-                                  return (
-                                    String(a.espaco_id) ===
-                                    String(idSelecionado)
-                                  );
-                                return false;
-                              });
-
+                                  String(a.slot_horario_id) ===
+                                    String(slot.id) &&
+                                  (tipoFiltro === "TURMA"
+                                    ? String(a.turma_id) ===
+                                      String(idSelecionado)
+                                    : tipoFiltro === "PROFESSOR"
+                                      ? String(a.professor_id) ===
+                                        String(idSelecionado)
+                                      : String(a.espaco_id) ===
+                                        String(idSelecionado)),
+                              );
                               if (!aula)
                                 return (
                                   <td
@@ -389,7 +392,6 @@ export default function HomePage() {
                                     className="border-r border-gray-100 print:border-gray-300"
                                   ></td>
                                 );
-
                               const disc = dados.disciplinas.find(
                                 (d: any) => d.id === aula.disciplina_id,
                               );
@@ -405,7 +407,6 @@ export default function HomePage() {
                               const curso = dados.cursos.find(
                                 (c: any) => c.id === turma?.curso_id,
                               );
-
                               return (
                                 <td
                                   key={dia.id}
@@ -422,7 +423,6 @@ export default function HomePage() {
                                       {disc?.sigla ? `${disc.sigla} - ` : ""}
                                       {disc?.nome}
                                     </div>
-
                                     <div className="space-y-0.5">
                                       {tipoFiltro !== "PROFESSOR" && (
                                         <div className="text-[9px] font-bold text-gray-700/90 print:text-[10px] truncate uppercase">
@@ -455,52 +455,25 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* RODAPÉ INFORMATIVO COM ACESSO À GESTÃO */}
       <footer className="max-w-7xl mx-auto p-8 text-center print:hidden border-t border-gray-100 mt-12">
         <div className="flex flex-col items-center gap-4">
           <div className="text-gray-400 text-xs leading-relaxed max-w-md">
             Para gerar um PDF, selecione o filtro desejado e utilize a função de
             impressão do navegador.
-            <br />
-            Certifique-se de que a opção "Gráficos de segundo plano" está ativa.
           </div>
-
           <Link
-            href="/login"
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-gray-200 text-gray-400 hover:text-green-700 hover:border-green-200 hover:bg-green-50 transition-all text-xs font-bold group"
+            href={logado ? "/painel" : "/login"}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border transition-all text-xs font-bold group ${logado ? "bg-green-600 text-white border-green-500 hover:bg-green-700" : "border-gray-200 text-gray-400 hover:text-green-700 hover:border-green-200 hover:bg-green-50"}`}
           >
-            <span className="opacity-60 group-hover:opacity-100">🔒</span>
-            Acesso Restrito à Gestão
+            <span
+              className={logado ? "" : "opacity-60 group-hover:opacity-100"}
+            >
+              {logado ? "⬅" : "🔒"}
+            </span>
+            {logado ? "Voltar ao Painel de Gestão" : "Acesso Restrito à Gestão"}
           </Link>
         </div>
       </footer>
-
-      {/* CSS GLOBAL PARA IMPRESSÃO */}
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: landscape;
-            margin: 0.5cm;
-          }
-          body {
-            background: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          .print\:hidden {
-            display: none !important;
-          }
-          .print\:break-before-page {
-            break-before: page;
-            page-break-before: always;
-            margin-top: 0 !important;
-          }
-          tr {
-            page-break-inside: avoid;
-            break-inside: avoid;
-          }
-        }
-      `}</style>
     </div>
   );
 }
