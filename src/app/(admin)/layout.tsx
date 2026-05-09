@@ -68,6 +68,11 @@ export default function AdminLayout({
         { nome: "Gestão de Versões", href: "/cadastros/versoes", icone: "🔄" },
         { nome: "Carga Horária", href: "/relatorios/professores", icone: "📈" },
         { nome: "Visualizar Horários", href: "/", icone: "👁️" },
+        {
+          nome: "Exportar PDF Integrado",
+          href: "/relatorios/pdf-integrado",
+          icone: "📄",
+        },
       ],
     },
     {
