@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 
 export default function ModoPlanilha({
@@ -15,6 +15,7 @@ export default function ModoPlanilha({
   recarregarAulas,
 }: any) {
   const [linhas, setLinhas] = useState<any[]>([]);
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("");
 
   const formatarHora = (hora: string) => {
     if (!hora) return "";
@@ -31,7 +32,140 @@ export default function ModoPlanilha({
     espaco_id: "",
   });
 
+  // =========================================================================
+  // LÓGICA 100% DINÂMICA: As abas são geradas baseadas no campo 'modalidade'
+  // =========================================================================
+  const getCategoriaCurso = (curso: any) => {
+    // Pega a modalidade, remove espaços em branco e deixa maiúsculo.
+    // Se estiver vazio, chama de "SEM MODALIDADE".
+    const mod = (curso.modalidade || "").trim().toUpperCase();
+    return mod ? mod : "SEM MODALIDADE";
+  };
+
+  const categoriasDisponiveis = useMemo(() => {
+    const cats = new Set<string>();
+
+    // Adiciona todas as modalidades que existirem no banco
+    cursos.forEach((c: any) => cats.add(getCategoriaCurso(c)));
+
+    // Verifica se existem aulas perdidas (sem turma ou curso) para não as esconder
+    const temAulasSemCurso = aulas.some((a: any) => {
+      const t = turmas.find(
+        (turma: any) => String(turma.id) === String(a.turma_id),
+      );
+      return (
+        !t?.curso_id ||
+        !cursos.some((c: any) => String(c.id) === String(t.curso_id))
+      );
+    });
+    if (temAulasSemCurso) cats.add("AULAS ÓRFÃS / ERRO DE CADASTRO");
+
+    return Array.from(cats).sort();
+  }, [cursos, aulas, turmas]);
+
   useEffect(() => {
+    // Seleciona a primeira aba disponível automaticamente ao abrir
+    if (!categoriaFiltro && categoriasDisponiveis.length > 0) {
+      if (categoriasDisponiveis.includes("INTEGRADO"))
+        setCategoriaFiltro("INTEGRADO");
+      else setCategoriaFiltro(categoriasDisponiveis[0]);
+    }
+  }, [categoriasDisponiveis, categoriaFiltro]);
+
+  // =========================================================================
+  // OTIMIZAÇÕES DE PERFORMANCE
+  // =========================================================================
+  const disciplinasPorCurso = useMemo(() => {
+    const mapa = new Map();
+    cursos.forEach((c: any) => {
+      const disc = disciplinas
+        .filter((d: any) => String(d.curso_id) === String(c.id))
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome));
+      mapa.set(String(c.id), disc);
+    });
+    return mapa;
+  }, [cursos, disciplinas]);
+
+  const mapaCoresTurma = useMemo(() => {
+    const mapa = new Map();
+    turmas.forEach((t: any) => {
+      const c = cursos.find((c: any) => String(c.id) === String(t.curso_id));
+      if (c?.cor_identificacao) mapa.set(String(t.id), c.cor_identificacao);
+    });
+    return mapa;
+  }, [turmas, cursos]);
+
+  const opcoesProfessores = useMemo(
+    () => (
+      <>
+        <option value="">(Nenhum)</option>
+        {professores.map((p: any) => (
+          <option key={p.id} value={p.id}>
+            {p.nome}
+          </option>
+        ))}
+      </>
+    ),
+    [professores],
+  );
+
+  const opcoesEspacos = useMemo(
+    () => (
+      <>
+        <option value="">(Nenhum)</option>
+        {espacos.map((e: any) => (
+          <option key={e.id} value={e.id}>
+            {e.nome}
+          </option>
+        ))}
+      </>
+    ),
+    [espacos],
+  );
+
+  const opcoesSlots = useMemo(
+    () => (
+      <>
+        <option value="">Selecione...</option>
+        {slots.map((s: any) => (
+          <option key={s.id} value={s.id}>
+            {formatarHora(s.hora_inicio)} - {formatarHora(s.hora_fim)}
+          </option>
+        ))}
+      </>
+    ),
+    [slots],
+  );
+
+  const opcoesTurmasFiltradas = useMemo(() => {
+    const cursosOrdenados = [...cursos]
+      .filter((c) => getCategoriaCurso(c) === categoriaFiltro)
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+
+    return cursosOrdenados.map((curso) => {
+      const turmasDoCurso = turmas
+        .filter((t: any) => String(t.curso_id) === String(curso.id))
+        .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
+
+      if (turmasDoCurso.length === 0) return null;
+      return (
+        <optgroup key={curso.id} label={curso.nome}>
+          {turmasDoCurso.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.codigo}
+            </option>
+          ))}
+        </optgroup>
+      );
+    });
+  }, [cursos, turmas, categoriaFiltro]);
+
+  // =========================================================================
+  // GERAÇÃO DAS LINHAS DA PLANILHA (Agrupadas e Ordenadas)
+  // =========================================================================
+  useEffect(() => {
+    if (!categoriaFiltro) return;
+
     const aulasMapeadas = aulas.map((a: any) => ({ ...a }));
 
     const mapaDiasOrdenacao: Record<string, number> = {
@@ -75,48 +209,53 @@ export default function ModoPlanilha({
       (a.nome || "").localeCompare(b.nome || ""),
     );
 
-    cursosOrdenados.forEach((curso: any) => {
-      const aulasDesteCurso = aulasMapeadas.filter((a: any) => {
+    if (categoriaFiltro !== "AULAS ÓRFÃS / ERRO DE CADASTRO") {
+      const cursosDaCategoria = cursosOrdenados.filter(
+        (c) => getCategoriaCurso(c) === categoriaFiltro,
+      );
+
+      cursosDaCategoria.forEach((curso: any) => {
+        const aulasDesteCurso = aulasMapeadas.filter((a: any) => {
+          const t = turmas.find(
+            (turma: any) => String(turma.id) === String(a.turma_id),
+          );
+          return String(t?.curso_id) === String(curso.id);
+        });
+
+        if (aulasDesteCurso.length > 0) {
+          aulasDesteCurso.sort(ordenarInterno);
+          novasLinhas.push(...aulasDesteCurso);
+          novasLinhas.push(criarLinhaVazia()); // Espaço visual entre cursos
+        }
+      });
+    } else {
+      const aulasSemCurso = aulasMapeadas.filter((a: any) => {
         const t = turmas.find(
           (turma: any) => String(turma.id) === String(a.turma_id),
         );
-        return String(t?.curso_id) === String(curso.id);
+        return (
+          !t?.curso_id ||
+          !cursos.some((c: any) => String(c.id) === String(t.curso_id))
+        );
       });
 
-      // ADICIONA AS AULAS E AS 2 LINHAS EXTRAS APENAS SE O CURSO JÁ TIVER AULAS
-      if (aulasDesteCurso.length > 0) {
-        aulasDesteCurso.sort(ordenarInterno);
-        novasLinhas.push(...aulasDesteCurso);
-        novasLinhas.push(criarLinhaVazia());
-        novasLinhas.push(criarLinhaVazia());
+      if (aulasSemCurso.length > 0) {
+        aulasSemCurso.sort(ordenarInterno);
+        novasLinhas.push(...aulasSemCurso);
       }
-    });
-
-    const aulasSemCurso = aulasMapeadas.filter((a: any) => {
-      const t = turmas.find(
-        (turma: any) => String(turma.id) === String(a.turma_id),
-      );
-      return (
-        !t?.curso_id ||
-        !cursos.some((c: any) => String(c.id) === String(t.curso_id))
-      );
-    });
-
-    if (aulasSemCurso.length > 0) {
-      aulasSemCurso.sort(ordenarInterno);
-      novasLinhas.push(...aulasSemCurso);
-      novasLinhas.push(criarLinhaVazia());
-      novasLinhas.push(criarLinhaVazia());
     }
 
-    // Se o banco estiver 100% vazio (nenhuma aula em nenhum curso), adiciona 5 linhas iniciais
+    // Se a aba não tiver nenhuma aula ainda, coloca 5 linhas em branco para começar
     if (novasLinhas.length === 0) {
       for (let i = 0; i < 5; i++) novasLinhas.push(criarLinhaVazia());
     }
 
     setLinhas(novasLinhas);
-  }, [aulas, turmas, cursos, slots]);
+  }, [aulas, turmas, cursos, slots, categoriaFiltro]);
 
+  // =========================================================================
+  // FUNÇÕES DE AÇÃO
+  // =========================================================================
   const adicionarLinha = () => setLinhas([...linhas, criarLinhaVazia()]);
 
   const duplicarLinha = (id_original: string) => {
@@ -144,16 +283,13 @@ export default function ModoPlanilha({
     const novasLinhas = linhas.map((linha) => {
       if (linha.id === id) {
         const linhaAtualizada = { ...linha, [campo]: valor };
-        if (campo === "turma_id") {
-          linhaAtualizada.disciplina_id = "";
-        }
+        if (campo === "turma_id") linhaAtualizada.disciplina_id = "";
         return linhaAtualizada;
       }
       return linha;
     });
 
     setLinhas(novasLinhas);
-
     const linhaAtualizada = novasLinhas.find((l) => l.id === id);
 
     if (
@@ -180,11 +316,8 @@ export default function ModoPlanilha({
     };
 
     const { error } = await supabase.from("aulas").upsert(payload);
-    if (!error) {
-      recarregarAulas();
-    } else {
-      console.error("Erro ao salvar linha no Supabase:", error);
-    }
+    if (!error) recarregarAulas();
+    else console.error("Erro ao salvar linha no Supabase:", error);
   };
 
   const removerLinha = async (id: string) => {
@@ -231,11 +364,10 @@ export default function ModoPlanilha({
           (p: any) => String(p.id) === String(aulaAtual.professor_id),
         );
         if (professorResp && professorResp.dia_planejamento) {
-          const diaPlan = String(professorResp.dia_planejamento)
-            .trim()
-            .toUpperCase();
-          const diaAula = String(aulaAtual.dia_semana).trim().toUpperCase();
-          if (diaPlan === diaAula) {
+          if (
+            String(professorResp.dia_planejamento).trim().toUpperCase() ===
+            String(aulaAtual.dia_semana).trim().toUpperCase()
+          ) {
             errosDaLinha.push(
               "Bloqueio: Professor está em dia de planejamento.",
             );
@@ -251,7 +383,6 @@ export default function ModoPlanilha({
 
         linhasValidas.forEach((outraAula) => {
           if (String(aulaAtual.id) === String(outraAula.id)) return;
-
           const outroSlot = getSlot(outraAula.slot_horario_id);
           if (!outroSlot) return;
 
@@ -314,12 +445,9 @@ export default function ModoPlanilha({
             aulaAtual.professor_id &&
             String(aulaAtual.professor_id) === String(outraAula.professor_id)
           ) {
-            const diaAnterior = getDiaAnterior(aulaAtual.dia_semana);
-            const diaSeguinte = getDiaSeguinte(aulaAtual.dia_semana);
-
             if (
               isPrimeiraDaManha(slotAtual.hora_inicio) &&
-              outraAula.dia_semana === diaAnterior &&
+              outraAula.dia_semana === getDiaAnterior(aulaAtual.dia_semana) &&
               isUltimaDaNoite(outroSlot.hora_fim)
             ) {
               errosDaLinha.push(
@@ -328,7 +456,7 @@ export default function ModoPlanilha({
             }
             if (
               isUltimaDaNoite(slotAtual.hora_fim) &&
-              outraAula.dia_semana === diaSeguinte &&
+              outraAula.dia_semana === getDiaSeguinte(aulaAtual.dia_semana) &&
               isPrimeiraDaManha(outroSlot.hora_inicio)
             ) {
               errosDaLinha.push(
@@ -339,21 +467,18 @@ export default function ModoPlanilha({
         });
 
         if (turnoAtual) turnosDoProfessorNoDia.add(turnoAtual);
-        if (turnosDoProfessorNoDia.size > 2) {
+        if (turnosDoProfessorNoDia.size > 2)
           errosDaLinha.push(
             `Limite: Professor alocado em ${turnosDoProfessorNoDia.size} turnos hoje.`,
           );
-        }
-        if (aulasDestaDisciplinaNoDia + 1 > 2) {
+        if (aulasDestaDisciplinaNoDia + 1 > 2)
           errosDaLinha.push(
             "Limite: Mais de 2 aulas geminadas da mesma disciplina hoje.",
           );
-        }
       }
 
-      if (errosDaLinha.length > 0) {
+      if (errosDaLinha.length > 0)
         conflitos.set(aulaAtual.id, [...new Set(errosDaLinha)]);
-      }
     });
 
     return conflitos;
@@ -361,72 +486,65 @@ export default function ModoPlanilha({
 
   const mapaDeConflitos = calcularConflitos();
 
-  const obterCorDoBanco = (turmaId: string) => {
-    if (!turmaId) return "";
-    const turmaObj = turmas.find((t: any) => String(t.id) === String(turmaId));
-    if (!turmaObj || !turmaObj.curso_id) return "";
-    const cursoObj = cursos.find(
-      (c: any) => String(c.id) === String(turmaObj.curso_id),
-    );
-    return cursoObj?.cor_identificacao || "";
-  };
-
-  const renderOpcoesTurmas = () => {
-    const cursosOrdenados = [...cursos].sort((a, b) =>
-      a.nome.localeCompare(b.nome),
-    );
-    return cursosOrdenados.map((curso) => {
-      const turmasDoCurso = turmas
-        .filter((t: any) => String(t.curso_id) === String(curso.id))
-        .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
-      if (turmasDoCurso.length === 0) return null;
-      return (
-        <optgroup key={curso.id} label={curso.nome}>
-          {turmasDoCurso.map((t: any) => (
-            <option key={t.id} value={t.id}>
-              {t.codigo}
-            </option>
-          ))}
-        </optgroup>
-      );
-    });
-  };
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-4 bg-gray-50 flex justify-between items-center border-b border-gray-200">
+      {/* ABAS DE NAVEGAÇÃO DE MODALIDADES GERADAS DINAMICAMENTE */}
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap gap-2">
+        {categoriasDisponiveis.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCategoriaFiltro(cat)}
+            className={`px-4 py-1.5 rounded-full text-xs font-black transition-all border ${
+              categoriaFiltro === cat
+                ? "bg-green-700 text-white border-green-700 shadow-sm"
+                : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-gray-800"
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4 bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-200">
         <div>
           <h2 className="font-bold text-gray-700 text-lg">
-            Edição em Lote (Planilha)
+            Planilha: <span className="text-green-700">{categoriaFiltro}</span>
           </h2>
           <p className="text-sm text-gray-500">
-            Aulas agrupadas por curso. Use as linhas vazias entre os blocos para
-            novos lançamentos.
+            {linhas.length} linha(s) exibida(s) nesta categoria.
           </p>
         </div>
         <button
           onClick={adicionarLinha}
-          className="bg-green-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2"
+          className="bg-green-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2 w-full md:w-auto justify-center"
         >
-          <span className="text-lg leading-none">+</span> Nova Linha Final
+          <span className="text-lg leading-none">+</span> Adicionar Linha Vazia
         </button>
       </div>
 
-      <div className="w-full">
-        <table className="w-full text-left border-collapse table-fixed">
+      <div className="w-full overflow-x-auto">
+        <table className="w-full text-left border-collapse table-fixed min-w-[800px]">
           <thead>
-            <tr className="bg-green-700 text-white text-sm uppercase tracking-wider">
-              <th className="p-3 border-r border-green-600 w-[12%]">Turma</th>
-              <th className="p-3 border-r border-green-600 w-[23%]">
+            <tr className="bg-green-800 text-white text-xs uppercase tracking-wider">
+              <th className="p-3 border-r border-green-700 w-[15%] font-black">
+                Turma
+              </th>
+              <th className="p-3 border-r border-green-700 w-[23%] font-black">
                 Disciplina
               </th>
-              <th className="p-3 border-r border-green-600 w-[20%]">
+              <th className="p-3 border-r border-green-700 w-[20%] font-black">
                 Professor
               </th>
-              <th className="p-3 border-r border-green-600 w-[12%]">Dia</th>
-              <th className="p-3 border-r border-green-600 w-[13%]">Horário</th>
-              <th className="p-3 border-r border-green-600 w-[12%]">Sala</th>
-              <th className="p-3 text-center w-20">Ação</th>
+              <th className="p-3 border-r border-green-700 w-[12%] font-black">
+                Dia
+              </th>
+              <th className="p-3 border-r border-green-700 w-[13%] font-black">
+                Horário
+              </th>
+              <th className="p-3 border-r border-green-700 w-[12%] font-black">
+                Sala
+              </th>
+              <th className="p-3 text-center w-[5%] font-black">Ação</th>
             </tr>
           </thead>
           <tbody className="text-sm">
@@ -445,7 +563,8 @@ export default function ModoPlanilha({
               const linhaRascunho = temDado && !estaCompleta;
               const erros = mapaDeConflitos.get(linha.id) || [];
               const temConflito = erros.length > 0;
-              const corHexadecimal = obterCorDoBanco(linha.turma_id);
+              const corHexadecimal =
+                mapaCoresTurma.get(String(linha.turma_id)) || "";
 
               let classeLinha =
                 "border-b transition-all group hover:brightness-95 ";
@@ -455,14 +574,11 @@ export default function ModoPlanilha({
               else if (linhaRascunho)
                 classeLinha += " border-l-4 border-l-yellow-400";
 
-              const turmaSelecionadaObj = turmas.find(
+              const turmaObj = turmas.find(
                 (t: any) => String(t.id) === String(linha.turma_id),
               );
-              const cursoId = turmaSelecionadaObj?.curso_id;
-              const disciplinasFiltradas = cursoId
-                ? disciplinas
-                    .filter((d: any) => String(d.curso_id) === String(cursoId))
-                    .sort((a: any, b: any) => a.nome.localeCompare(b.nome))
+              const disciplinasFiltradas = turmaObj?.curso_id
+                ? disciplinasPorCurso.get(String(turmaObj.curso_id)) || []
                 : [];
 
               return (
@@ -479,10 +595,10 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "turma_id", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800"
                     >
                       <option value="">Selecione...</option>
-                      {renderOpcoesTurmas()}
+                      {opcoesTurmasFiltradas}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
@@ -496,7 +612,7 @@ export default function ModoPlanilha({
                           e.target.value,
                         )
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none font-bold text-gray-800 disabled:opacity-50"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800 disabled:opacity-50"
                     >
                       <option value="">Selecione...</option>
                       {disciplinasFiltradas.map((d: any) => (
@@ -512,14 +628,9 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "professor_id", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
                     >
-                      <option value="">(Nenhum)</option>
-                      {professores.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome}
-                        </option>
-                      ))}
+                      {opcoesProfessores}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
@@ -528,7 +639,7 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "dia_semana", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
                     >
                       <option value="">Selecione...</option>
                       <option value="SEGUNDA">Segunda-feira</option>
@@ -548,15 +659,9 @@ export default function ModoPlanilha({
                           e.target.value,
                         )
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
                     >
-                      <option value="">Selecione...</option>
-                      {slots.map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {formatarHora(s.hora_inicio)} -{" "}
-                          {formatarHora(s.hora_fim)}
-                        </option>
-                      ))}
+                      {opcoesSlots}
                     </select>
                   </td>
                   <td className="p-2 border-r border-gray-200/50 overflow-hidden">
@@ -565,18 +670,13 @@ export default function ModoPlanilha({
                       onChange={(e) =>
                         atualizarCampo(linha.id, "espaco_id", e.target.value)
                       }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-sm p-1 outline-none"
+                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
                     >
-                      <option value="">(Nenhum)</option>
-                      {espacos.map((e: any) => (
-                        <option key={e.id} value={e.id}>
-                          {e.nome}
-                        </option>
-                      ))}
+                      {opcoesEspacos}
                     </select>
                   </td>
                   <td className="p-2 text-center">
-                    <div className="flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center gap-1.5">
                       {temConflito && (
                         <span
                           className="text-red-600 font-bold cursor-help text-lg animate-pulse"
@@ -587,13 +687,15 @@ export default function ModoPlanilha({
                       )}
                       <button
                         onClick={() => duplicarLinha(linha.id)}
-                        className="text-blue-600/60 hover:text-blue-700 font-bold px-1.5 py-1 rounded text-lg"
+                        className="text-blue-600/60 hover:text-blue-700 font-bold p-1 rounded text-lg"
+                        title="Duplicar"
                       >
                         ⧉
                       </button>
                       <button
                         onClick={() => removerLinha(linha.id)}
-                        className="text-red-600/60 hover:text-red-700 font-bold px-1.5 py-1 rounded"
+                        className="text-red-600/60 hover:text-red-700 font-bold p-1 rounded"
+                        title="Remover"
                       >
                         ✕
                       </button>

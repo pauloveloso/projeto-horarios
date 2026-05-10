@@ -69,15 +69,10 @@ export default function ExportarPDFIntegradoPage() {
         supabase.from("slots_horarios").select("*").order("hora_inicio"),
       ]);
 
-      // FILTRO RESTRITO
       const cursosIntegrados =
         cursos?.filter((c) => {
-          const modalidade = (c.modalidade || "").toLowerCase();
-          return (
-            modalidade.includes("técnico integrado") ||
-            modalidade.includes("tecnico integrado") ||
-            modalidade === "integrado"
-          );
+          const modalidade = (c.modalidade || "").toUpperCase();
+          return modalidade === "INTEGRADO";
         }) || [];
 
       const slotsFiltrados =
@@ -95,9 +90,9 @@ export default function ExportarPDFIntegradoPage() {
               if (String(t.curso_id) !== String(curso.id)) return false;
               const codigo = (t.codigo || "").toUpperCase();
               return (
-                codigo.includes(`${ano}º`) ||
-                codigo.includes(`${ano}°`) ||
-                codigo.startsWith(ano)
+                codigo.includes(` ${ano}`) ||
+                codigo.includes(`-${ano}`) ||
+                codigo.includes(`${ano}º`)
               );
             }) || [];
 
@@ -154,7 +149,7 @@ export default function ExportarPDFIntegradoPage() {
             Relatório Integrado (Oficial)
           </h1>
           <p className="text-xs text-gray-500 font-bold uppercase mt-1">
-            Filtro: Modalidade "Técnico Integrado" • 8 Aulas/Dia • Modo Compacto
+            Filtro: Modalidade "INTEGRADO" • Correção de Quebra de Texto
           </p>
         </div>
         <div className="flex flex-wrap gap-4 w-full md:w-auto">
@@ -181,7 +176,6 @@ export default function ExportarPDFIntegradoPage() {
       <div className="print:block space-y-6 print:space-y-4">
         {dados?.grupos.map((grupo: any) => (
           <div key={grupo.id} className="print:mt-4">
-            {/* Cabeçalho do Grupo Condensado */}
             <div className="text-center mb-2 border-b-[1.5px] border-black pb-1">
               <h2 className="text-[10px] font-black uppercase tracking-tight">
                 IFNMG - Campus Januária | Quadro de Horário: {grupo.nomeGrupo}
@@ -198,8 +192,7 @@ export default function ExportarPDFIntegradoPage() {
                     TURMA: {turma.codigo}
                   </div>
 
-                  {/* Tabela Ultra Condensada */}
-                  <table className="w-full border-collapse border-[1.2px] border-black table-fixed text-[8px] leading-[1.1]">
+                  <table className="w-full border-collapse border-[1.2px] border-black table-fixed text-[8px]">
                     <thead>
                       <tr className="bg-gray-100 font-black">
                         <th className="border border-black p-0.5 w-[12%] text-[9px]">
@@ -217,7 +210,10 @@ export default function ExportarPDFIntegradoPage() {
                     </thead>
                     <tbody>
                       {dados.slots.map((slot: any) => (
-                        <tr key={slot.id} className="h-auto">
+                        <tr
+                          key={slot.id}
+                          className="h-auto print:break-inside-avoid"
+                        >
                           <td className="border border-black p-0.5 text-center font-bold bg-gray-50 align-middle">
                             {slot.hora_inicio.substring(0, 5)}
                             <br />
@@ -249,25 +245,26 @@ export default function ExportarPDFIntegradoPage() {
                             return (
                               <td
                                 key={dia.id}
-                                className="border border-black p-0.5 align-top overflow-hidden"
+                                /* REMOVIDO overflow-hidden E ADICIONADO break-words */
+                                className="border border-black p-1 align-top break-words"
                               >
                                 <div
-                                  className="font-black uppercase truncate"
+                                  className="font-black uppercase leading-[1.1] mb-0.5"
                                   title={disc?.nome}
                                 >
                                   {disc?.nome}
                                 </div>
                                 <div
-                                  className="text-gray-700 truncate"
+                                  className="text-gray-800 leading-[1.1] mb-0.5"
                                   title={prof?.nome}
                                 >
                                   {prof?.nome}
                                 </div>
                                 <div
-                                  className="italic text-gray-500 text-[7px] truncate"
+                                  className="italic text-gray-500 text-[7px] leading-[1.1]"
                                   title={sala?.nome}
                                 >
-                                  {sala?.nome || "S/ SALA"}
+                                  {sala?.nome || "S/S"}
                                 </div>
                               </td>
                             );
@@ -283,17 +280,12 @@ export default function ExportarPDFIntegradoPage() {
         ))}
       </div>
 
-      {/* A MÁGICA DA PAGINAÇÃO: 
-        Este CSS anula o overflow:hidden e h-screen do layout.tsx EXCLUSIVAMENTE na hora de imprimir, 
-        permitindo que o navegador renderize as páginas subsequentes! 
-      */}
       <style jsx global>{`
         @media print {
           @page {
             size: landscape;
             margin: 0.5cm;
           }
-          /* Remove restrições de altura globalmente para liberar a paginação */
           html,
           body,
           #__next,
@@ -313,16 +305,14 @@ export default function ExportarPDFIntegradoPage() {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .print\:hidden {
+          .print\\:hidden {
             display: none !important;
           }
-          /* Previne que a turma seja cortada ao meio */
-          .print\:break-inside-avoid {
+          .print\\:break-inside-avoid {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             display: block !important;
           }
-          /* Força a tabela a obedecer nossas porcentagens fixas e travar o tamanho */
           table {
             border-collapse: collapse !important;
             width: 100% !important;
@@ -332,6 +322,7 @@ export default function ExportarPDFIntegradoPage() {
           th {
             border: 1px solid black !important;
             word-wrap: break-word !important;
+            white-space: normal !important;
           }
         }
       `}</style>
