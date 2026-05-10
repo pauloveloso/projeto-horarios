@@ -195,8 +195,6 @@ export default function HomePage() {
                         if (v.data_inicio_vigencia > hoje) {
                           sufixo = "(Prévia)";
                         } else {
-                          // Como a lista vem do Supabase ordenada por data DESC,
-                          // a primeira versão PUBLICADA com data <= hoje é a ATUAL.
                           const atual = versoes.find(
                             (ver) =>
                               ver.status === "PUBLICADA" &&
@@ -404,21 +402,14 @@ export default function HomePage() {
                               const turma = dados.turmas.find(
                                 (t: any) => t.id === aula.turma_id,
                               );
-                              const curso = dados.cursos.find(
-                                (c: any) => c.id === turma?.curso_id,
-                              );
+
                               return (
                                 <td
                                   key={dia.id}
                                   className="p-1 border-r border-gray-100 align-top print:border-gray-300"
                                 >
-                                  <div
-                                    className="h-full w-full rounded p-1.5 flex flex-col justify-center border border-black/5 print:border-gray-300"
-                                    style={{
-                                      backgroundColor:
-                                        curso?.cor_identificacao || "#f9fafb",
-                                    }}
-                                  >
+                                  {/* Cores dinâmicas removidas, substituídas por bg-gray-50 para visual clean */}
+                                  <div className="h-full w-full rounded p-1.5 flex flex-col justify-center border border-black/5 print:border-gray-300 bg-gray-50">
                                     <div className="font-black text-xs leading-tight text-gray-900 print:text-[12px] mb-0.5 uppercase">
                                       {disc?.sigla ? `${disc.sigla} - ` : ""}
                                       {disc?.nome}
