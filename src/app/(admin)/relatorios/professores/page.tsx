@@ -42,11 +42,12 @@ export default function RelatorioProfessoresPage() {
       setCarregando(true);
       try {
         const [{ data: dProf }, { data: dAulas }] = await Promise.all([
-          supabase.from("professores").select("*").order("nome"),
+          supabase.from("professores").select("*").order("nome").limit(2000),
           supabase
             .from("aulas")
             .select("professor_id")
-            .eq("versao_id", versaoSelecionada), // <-- FILTRO DE VERSÃO APLICADO
+            .eq("versao_id", versaoSelecionada)
+            .limit(10000),
         ]);
 
         if (dProf) setProfessores(dProf);

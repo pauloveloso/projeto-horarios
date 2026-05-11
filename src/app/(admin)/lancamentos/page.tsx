@@ -21,13 +21,14 @@ export default function LancamentosPage() {
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
 
-  // ATUALIZADO: Só busca as aulas do rascunho atual
+  // ATUALIZADO: Só busca as aulas do rascunho atual com o limite correto
   const buscarAulas = async () => {
     if (!versaoRascunho) return;
     const { data } = await supabase
       .from("aulas")
       .select("*")
-      .eq("versao_id", versaoRascunho.id);
+      .eq("versao_id", versaoRascunho.id)
+      .limit(5000); // Ponto e vírgula corrigido aqui
     if (data) setAulas(data);
   };
 
@@ -50,12 +51,16 @@ export default function LancamentosPage() {
         if (montado) setVersaoRascunho(rascunho);
         if (rascunho) rascunhoAtualId = rascunho.id;
 
-        // 2. Prepara a query de aulas dinamicamente
+        // 2. Prepara a query de aulas dinamicamente com o limite de 5000
         const queryAulas = rascunho
-          ? supabase.from("aulas").select("*").eq("versao_id", rascunho.id)
+          ? supabase
+              .from("aulas")
+              .select("*")
+              .eq("versao_id", rascunho.id)
+              .limit(5000)
           : null;
 
-        // 3. Busca todos os dados mestres simultaneamente
+        // 3. Busca todos os dados mestres simultaneamente COM LIMITES ESTENDIDOS
         const [
           { data: dTurmas },
           { data: dCursos },
@@ -65,11 +70,11 @@ export default function LancamentosPage() {
           { data: dSlots },
           respostaAulas,
         ] = await Promise.all([
-          supabase.from("turmas").select("*").order("codigo"),
+          supabase.from("turmas").select("*").order("codigo").limit(2000),
           supabase.from("cursos").select("*"),
-          supabase.from("professores").select("*").order("nome"),
-          supabase.from("disciplinas").select("*").order("nome"),
-          supabase.from("espacos").select("*").order("nome"),
+          supabase.from("professores").select("*").order("nome").limit(1000),
+          supabase.from("disciplinas").select("*").order("nome").limit(5000),
+          supabase.from("espacos").select("*").order("nome").limit(1000),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
           queryAulas ? queryAulas : Promise.resolve({ data: [] }),
         ]);

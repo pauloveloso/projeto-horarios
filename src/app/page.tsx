@@ -82,12 +82,16 @@ export default function HomePage() {
           { data: categorias },
           { data: slots },
         ] = await Promise.all([
-          supabase.from("aulas").select("*").eq("versao_id", versaoSelecionada),
-          supabase.from("turmas").select("*").order("codigo"),
+          supabase
+            .from("aulas")
+            .select("*")
+            .eq("versao_id", versaoSelecionada)
+            .limit(5000),
+          supabase.from("turmas").select("*").order("codigo").limit(2000),
           supabase.from("cursos").select("*").order("nome"),
-          supabase.from("professores").select("*").order("nome"),
-          supabase.from("disciplinas").select("*").order("nome"),
-          supabase.from("espacos").select("*").order("nome"),
+          supabase.from("professores").select("*").order("nome").limit(1000),
+          supabase.from("disciplinas").select("*").order("nome").limit(5000),
+          supabase.from("espacos").select("*").order("nome").limit(1000),
           supabase.from("categorias_espacos").select("*").order("nome"),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
         ]);

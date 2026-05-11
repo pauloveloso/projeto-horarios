@@ -60,12 +60,16 @@ export default function ExportarPDFIntegradoPage() {
         { data: espacos },
         { data: slots },
       ] = await Promise.all([
-        supabase.from("aulas").select("*").eq("versao_id", versaoSelecionada),
-        supabase.from("turmas").select("*").order("codigo"),
+        supabase
+          .from("aulas")
+          .select("*")
+          .eq("versao_id", versaoSelecionada)
+          .limit(5000),
+        supabase.from("turmas").select("*").order("codigo").limit(2000),
         supabase.from("cursos").select("*"),
-        supabase.from("professores").select("*"),
-        supabase.from("disciplinas").select("*"),
-        supabase.from("espacos").select("*"),
+        supabase.from("professores").select("*").limit(2000),
+        supabase.from("disciplinas").select("*").limit(5000),
+        supabase.from("espacos").select("*").limit(1000),
         supabase.from("slots_horarios").select("*").order("hora_inicio"),
       ]);
 

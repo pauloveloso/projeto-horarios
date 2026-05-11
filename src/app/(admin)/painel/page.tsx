@@ -7,6 +7,10 @@ import Link from "next/link";
 export default function DashboardPage() {
   const [carregando, setCarregando] = useState(true);
 
+  // NOVO: Estados para controlar a versão
+  const [versoes, setVersoes] = useState<any[]>([]);
+  const [versaoSelecionada, setVersaoSelecionada] = useState<string>("");
+
   const [metricas, setMetricas] = useState({
     totalAulas: 0,
     semProfessor: 0,
@@ -18,9 +22,42 @@ export default function DashboardPage() {
   const [alertasSecundarios, setAlertasSecundarios] = useState<any[]>([]);
   const [rankingCarga, setRankingCarga] = useState<any[]>([]);
 
+  // NOVO: Carrega as versões primeiro
   useEffect(() => {
-    carregarDadosEDiagnosticar();
+    async function carregarVersoes() {
+      const { data } = await supabase
+        .from("versoes_grade")
+        .select("*")
+        .order("data_inicio_vigencia", { ascending: false });
+
+      if (data && data.length > 0) {
+        setVersoes(data);
+
+        // Tenta achar um rascunho primeiro. Se não, pega a versão publicada atual
+        const rascunho = data.find((v) => v.status === "RASCUNHO");
+        if (rascunho) {
+          setVersaoSelecionada(rascunho.id);
+        } else {
+          const hoje = new Date().toISOString().split("T")[0];
+          const ativa =
+            data.find(
+              (v) => v.status === "PUBLICADA" && v.data_inicio_vigencia <= hoje,
+            ) || data[0];
+          setVersaoSelecionada(ativa.id);
+        }
+      } else {
+        setCarregando(false);
+      }
+    }
+    carregarVersoes();
   }, []);
+
+  // Modificado para carregar os dados sempre que a versão for alterada
+  useEffect(() => {
+    if (versaoSelecionada) {
+      carregarDadosEDiagnosticar();
+    }
+  }, [versaoSelecionada]);
 
   const carregarDadosEDiagnosticar = async () => {
     setCarregando(true);
@@ -33,11 +70,16 @@ export default function DashboardPage() {
         { data: espacos },
         { data: slots },
       ] = await Promise.all([
-        supabase.from("aulas").select("*"),
-        supabase.from("turmas").select("*"),
-        supabase.from("professores").select("*"),
-        supabase.from("disciplinas").select("*"),
-        supabase.from("espacos").select("*"),
+        // CORREÇÃO APLICADA: Filtro explícito pela versão selecionada
+        supabase
+          .from("aulas")
+          .select("*")
+          .eq("versao_id", versaoSelecionada)
+          .limit(5000),
+        supabase.from("turmas").select("*").limit(2000),
+        supabase.from("professores").select("*").limit(1000),
+        supabase.from("disciplinas").select("*").limit(5000),
+        supabase.from("espacos").select("*").limit(1000),
         supabase.from("slots_horarios").select("*"),
       ]);
 
@@ -181,7 +223,7 @@ export default function DashboardPage() {
     });
   };
 
-  if (carregando) {
+  if (carregando && !versaoSelecionada) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
@@ -190,8 +232,15 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* CABEÇALHO PADRÃO DO SISTEMA */}
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 relative">
+      {/* Loading Overlay suave ao trocar de versão */}
+      {carregando && versaoSelecionada && (
+        <div className="absolute inset-0 z-10 bg-white/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+          <div className="w-10 h-10 border-4 border-green-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+
+      {/* CABEÇALHO PADRÃO DO SISTEMA COM SELETOR */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-green-800">
@@ -201,12 +250,29 @@ export default function DashboardPage() {
             Visão estratégica da grade de horários do campus.
           </p>
         </div>
-        <button
-          onClick={carregarDadosEDiagnosticar}
-          className="bg-green-600 text-white px-5 py-2.5 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors shrink-0"
-        >
-          🔄 Atualizar Dados
-        </button>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+          {versoes.length > 0 && (
+            <select
+              value={versaoSelecionada}
+              onChange={(e) => setVersaoSelecionada(e.target.value)}
+              className="bg-gray-50 border border-gray-200 text-gray-700 text-sm font-bold rounded px-3 py-2.5 outline-none focus:ring-2 focus:ring-green-600 w-full sm:w-auto cursor-pointer"
+            >
+              {versoes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome} - {v.semestre}{" "}
+                  {v.status === "RASCUNHO" ? "(Rascunho)" : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={carregarDadosEDiagnosticar}
+            className="bg-green-600 text-white px-5 py-2.5 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors shrink-0 w-full sm:w-auto flex justify-center gap-2"
+          >
+            <span>🔄</span> Atualizar Dados
+          </button>
+        </div>
       </div>
 
       {/* METRICAS */}
