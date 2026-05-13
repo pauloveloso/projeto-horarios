@@ -391,7 +391,7 @@ export default function ModoGrade({
                                   <div
                                     className="absolute top-1 left-1 cursor-help text-base z-10 animate-pulse drop-shadow-sm"
                                     title={problemas
-                                      .map((p) => mapearMensagem(p))
+                                      .map((p: any) => mapearMensagem(p))
                                       .join("\n")}
                                   >
                                     {temCritico ? "🔴" : "🟡"}
@@ -406,7 +406,7 @@ export default function ModoGrade({
                                     <span
                                       className="cursor-help text-[10px] animate-pulse shrink-0"
                                       title={problemas
-                                        .map((p) => mapearMensagem(p))
+                                        .map((p: any) => mapearMensagem(p))
                                         .join("\n")}
                                     >
                                       {temCritico ? "🔴" : "🟡"}
