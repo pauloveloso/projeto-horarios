@@ -129,12 +129,15 @@ export default function ExportarPDFIntegradoPage() {
     carregarRelatorio();
   }, [versaoSelecionada]);
 
-  const getAula = (turmaId: string, diaId: string, slotId: string) => {
-    return dados?.aulas?.find(
-      (a: any) =>
-        String(a.turma_id) === String(turmaId) &&
-        a.dia_semana === diaId &&
-        String(a.slot_horario_id) === String(slotId),
+  // ALTERADO: De getAula para getAulasNoSlot (retorna array)
+  const getAulasNoSlot = (turmaId: string, diaId: string, slotId: string) => {
+    return (
+      dados?.aulas?.filter(
+        (a: any) =>
+          String(a.turma_id) === String(turmaId) &&
+          a.dia_semana === diaId &&
+          String(a.slot_horario_id) === String(slotId),
+      ) || []
     );
   };
 
@@ -213,68 +216,103 @@ export default function ExportarPDFIntegradoPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {dados.slots.map((slot: any) => (
-                        <tr
-                          key={slot.id}
-                          className="h-auto print:break-inside-avoid"
-                        >
-                          <td className="border border-black p-0.5 text-center font-bold bg-gray-50 align-middle">
-                            {slot.hora_inicio.substring(0, 5)}
-                            <br />
-                            {slot.hora_fim.substring(0, 5)}
-                          </td>
-                          {dias.map((dia) => {
-                            const aula = getAula(turma.id, dia.id, slot.id);
-                            if (!aula)
+                      {dados.slots.map((slot: any) => {
+                        // Verifica se existe alguma divisão na linha inteira
+                        const linhaTemChoque = dias.some(
+                          (dia) =>
+                            getAulasNoSlot(turma.id, dia.id, slot.id).length >
+                            1,
+                        );
+
+                        return (
+                          <tr
+                            key={slot.id}
+                            className="h-auto print:break-inside-avoid"
+                          >
+                            <td className="border border-black p-0.5 text-center font-bold bg-gray-50 align-middle">
+                              {slot.hora_inicio.substring(0, 5)}
+                              <br />
+                              {slot.hora_fim.substring(0, 5)}
+                            </td>
+                            {dias.map((dia) => {
+                              const aulasNoSlot = getAulasNoSlot(
+                                turma.id,
+                                dia.id,
+                                slot.id,
+                              );
+
+                              if (aulasNoSlot.length === 0) {
+                                return (
+                                  <td
+                                    key={dia.id}
+                                    className="border border-black p-0.5"
+                                  ></td>
+                                );
+                              }
+
+                              const isSplit = aulasNoSlot.length > 1;
+                              const isSingleInTallRow =
+                                linhaTemChoque && !isSplit;
+
                               return (
                                 <td
                                   key={dia.id}
-                                  className="border border-black p-0.5"
-                                ></td>
+                                  /* SE FOR SOLTEIRA NA LINHA ALTA, CENTRALIZA VERTICALMENTE E DÁ DESTAQUE CINZA */
+                                  className={`border border-black p-1 break-words ${isSingleInTallRow ? "align-middle bg-gray-100/70" : "align-top"}`}
+                                >
+                                  <div className="flex flex-col w-full gap-1">
+                                    {aulasNoSlot.map(
+                                      (aula: any, index: number) => {
+                                        const disc = dados.disciplinas?.find(
+                                          (d: any) =>
+                                            String(d.id) ===
+                                            String(aula.disciplina_id),
+                                        );
+                                        const prof = dados.professores?.find(
+                                          (p: any) =>
+                                            String(p.id) ===
+                                            String(aula.professor_id),
+                                        );
+                                        const sala = dados.espacos?.find(
+                                          (e: any) =>
+                                            String(e.id) ===
+                                            String(aula.espaco_id),
+                                        );
+
+                                        return (
+                                          <div
+                                            key={aula.id}
+                                            className={`flex flex-col ${isSplit && index > 0 ? "border-t border-dashed border-gray-400 pt-1 mt-0.5" : ""}`}
+                                          >
+                                            <div
+                                              className="font-black uppercase leading-[1.1] mb-0.5"
+                                              title={disc?.nome}
+                                            >
+                                              {disc?.nome}
+                                            </div>
+                                            <div
+                                              className="text-gray-800 leading-[1.1] mb-0.5"
+                                              title={prof?.nome}
+                                            >
+                                              {prof?.nome}
+                                            </div>
+                                            <div
+                                              className="italic text-gray-500 text-[7px] leading-[1.1]"
+                                              title={sala?.nome}
+                                            >
+                                              {sala?.nome || "S/S"}
+                                            </div>
+                                          </div>
+                                        );
+                                      },
+                                    )}
+                                  </div>
+                                </td>
                               );
-
-                            const disc = dados.disciplinas?.find(
-                              (d: any) =>
-                                String(d.id) === String(aula.disciplina_id),
-                            );
-                            const prof = dados.professores?.find(
-                              (p: any) =>
-                                String(p.id) === String(aula.professor_id),
-                            );
-                            const sala = dados.espacos?.find(
-                              (e: any) =>
-                                String(e.id) === String(aula.espaco_id),
-                            );
-
-                            return (
-                              <td
-                                key={dia.id}
-                                /* REMOVIDO overflow-hidden E ADICIONADO break-words */
-                                className="border border-black p-1 align-top break-words"
-                              >
-                                <div
-                                  className="font-black uppercase leading-[1.1] mb-0.5"
-                                  title={disc?.nome}
-                                >
-                                  {disc?.nome}
-                                </div>
-                                <div
-                                  className="text-gray-800 leading-[1.1] mb-0.5"
-                                  title={prof?.nome}
-                                >
-                                  {prof?.nome}
-                                </div>
-                                <div
-                                  className="italic text-gray-500 text-[7px] leading-[1.1]"
-                                  title={sala?.nome}
-                                >
-                                  {sala?.nome || "S/S"}
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
+                            })}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

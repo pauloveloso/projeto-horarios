@@ -1,0 +1,75 @@
+.
+├── AGENTS.md
+├── CLAUDE.md
+├── .env.local
+├── eslint.config.mjs
+├── estrutura_projeto.txt
+├── .gitignore
+├── next.config.ts
+├── next-env.d.ts
+├── package.json
+├── package-lock.json
+├── postcss.config.mjs
+├── README.md
+├── src
+│   ├── actions
+│   │   └── validar-aula.ts
+│   ├── app
+│   │   ├── (admin)
+│   │   │   ├── cadastros
+│   │   │   │   ├── cursos
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── disciplinas
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── espacos
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── professores
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── versoes
+│   │   │   │       └── page.tsx
+│   │   │   ├── lancamentos
+│   │   │   │   ├── components
+│   │   │   │   │   ├── ModoGrade.tsx
+│   │   │   │   │   └── ModoPlanilha.tsx
+│   │   │   │   ├── OLDpage.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── painel
+│   │   │   │   └── page.tsx
+│   │   │   └── relatorios
+│   │   │       ├── pdf-integrado
+│   │   │       │   └── page.tsx
+│   │   │       └── professores
+│   │   │           └── page.tsx
+│   │   ├── api
+│   │   │   ├── test-db
+│   │   │   │   └── route.ts
+│   │   │   ├── test-env
+│   │   │   │   └── route.ts
+│   │   │   └── test-validacoes
+│   │   │       └── route.ts
+│   │   ├── favicon.ico
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   ├── OLDpage.tsx
+│   │   ├── page copy.tsx
+│   │   ├── page.tsx
+│   │   ├── (public)
+│   │   │   └── page.tsx
+│   │   └── teste-conexao
+│   │       └── route.ts
+│   ├── lib
+│   │   ├── actions.ts
+│   │   ├── supabase.ts
+│   │   └── validacoes
+│   │       └── engine.ts
+│   ├── tests
+│   │   └── test-validacoes.ts
+│   └── types
+│       ├── database.ts
+│       └── validacoes.ts
+└── tsconfig.json
+
+28 directories, 45 files

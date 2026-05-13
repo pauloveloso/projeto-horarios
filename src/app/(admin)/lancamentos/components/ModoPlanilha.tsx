@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 export default function ModoPlanilha({
   versaoId,
   aulas,
+  choques = [], // <-- NOVO: Recebendo a inteligência da View
   turmas,
   cursos = [],
   professores,
@@ -32,23 +33,48 @@ export default function ModoPlanilha({
     espaco_id: "",
   });
 
-  // =========================================================================
-  // LÓGICA 100% DINÂMICA: As abas são geradas baseadas no campo 'modalidade'
-  // =========================================================================
+  // ==== TRADUTOR DE ALERTAS DA VIEW ====
+  const mapearMensagem = (choque: any) => {
+    // Se a View mandou uma mensagem específica (ex: Justificativa médica), usamos ela
+    if (choque.mensagem_customizada) return choque.mensagem_customizada;
+
+    switch (choque.tipo_choque) {
+      case "CHOQUE_TURMA":
+        return "🔴 Choque: Turma já possui aula neste horário.";
+      case "CHOQUE_ESPACO":
+        return "🔴 Choque: Sala/Laboratório já ocupado.";
+      case "CHOQUE_DOCENTE":
+        return "🔴 Choque: Professor já alocado em outra turma.";
+      case "DESCANSO_DOCENTE":
+        return "🔴 Alerta Trabalhista: Sem descanso interjornada (Mín. 10h).";
+      case "LIMITE_TURNOS":
+        return "🔴 Limite: Professor alocado em 3 turnos hoje.";
+      case "INDISPONIBILIDADE":
+        return "🔴 Indisponibilidade: Horário reservado para atendimento especial.";
+      case "DIA_PLANEJAMENTO":
+        return "🟡 Atenção: Dia de planejamento do professor.";
+      case "AULAS_GEMINADAS":
+        return "🟡 Limite: Mais de 2 aulas geminadas desta disciplina.";
+      case "CARGA_INCOMPLETA":
+        return "🟡 Carga Horária: Faltam aulas para esta disciplina.";
+      case "EXCESSO_CARGA":
+        return "🟡 Carga Horária: Disciplina com mais aulas que o permitido.";
+      case "FIM_DE_SEMANA":
+        return "🟡 Atenção: Professor leciona Sexta à noite e Segunda de manhã.";
+      default:
+        return "⚠️ Problema detectado.";
+    }
+  };
+
   const getCategoriaCurso = (curso: any) => {
-    // Pega a modalidade, remove espaços em branco e deixa maiúsculo.
-    // Se estiver vazio, chama de "SEM MODALIDADE".
     const mod = (curso.modalidade || "").trim().toUpperCase();
     return mod ? mod : "SEM MODALIDADE";
   };
 
   const categoriasDisponiveis = useMemo(() => {
     const cats = new Set<string>();
-
-    // Adiciona todas as modalidades que existirem no banco
     cursos.forEach((c: any) => cats.add(getCategoriaCurso(c)));
 
-    // Verifica se existem aulas perdidas (sem turma ou curso) para não as esconder
     const temAulasSemCurso = aulas.some((a: any) => {
       const t = turmas.find(
         (turma: any) => String(turma.id) === String(a.turma_id),
@@ -64,7 +90,6 @@ export default function ModoPlanilha({
   }, [cursos, aulas, turmas]);
 
   useEffect(() => {
-    // Seleciona a primeira aba disponível automaticamente ao abrir
     if (!categoriaFiltro && categoriasDisponiveis.length > 0) {
       if (categoriasDisponiveis.includes("INTEGRADO"))
         setCategoriaFiltro("INTEGRADO");
@@ -72,9 +97,6 @@ export default function ModoPlanilha({
     }
   }, [categoriasDisponiveis, categoriaFiltro]);
 
-  // =========================================================================
-  // OTIMIZAÇÕES DE PERFORMANCE
-  // =========================================================================
   const disciplinasPorCurso = useMemo(() => {
     const mapa = new Map();
     cursos.forEach((c: any) => {
@@ -160,14 +182,10 @@ export default function ModoPlanilha({
     });
   }, [cursos, turmas, categoriaFiltro]);
 
-  // =========================================================================
-  // GERAÇÃO DAS LINHAS DA PLANILHA (Agrupadas e Ordenadas)
-  // =========================================================================
   useEffect(() => {
     if (!categoriaFiltro) return;
 
     const aulasMapeadas = aulas.map((a: any) => ({ ...a }));
-
     const mapaDiasOrdenacao: Record<string, number> = {
       SEGUNDA: 1,
       TERCA: 2,
@@ -213,7 +231,6 @@ export default function ModoPlanilha({
       const cursosDaCategoria = cursosOrdenados.filter(
         (c) => getCategoriaCurso(c) === categoriaFiltro,
       );
-
       cursosDaCategoria.forEach((curso: any) => {
         const aulasDesteCurso = aulasMapeadas.filter((a: any) => {
           const t = turmas.find(
@@ -225,7 +242,7 @@ export default function ModoPlanilha({
         if (aulasDesteCurso.length > 0) {
           aulasDesteCurso.sort(ordenarInterno);
           novasLinhas.push(...aulasDesteCurso);
-          novasLinhas.push(criarLinhaVazia()); // Espaço visual entre cursos
+          novasLinhas.push(criarLinhaVazia());
         }
       });
     } else {
@@ -245,7 +262,6 @@ export default function ModoPlanilha({
       }
     }
 
-    // Se a aba não tiver nenhuma aula ainda, coloca 5 linhas em branco para começar
     if (novasLinhas.length === 0) {
       for (let i = 0; i < 5; i++) novasLinhas.push(criarLinhaVazia());
     }
@@ -253,9 +269,6 @@ export default function ModoPlanilha({
     setLinhas(novasLinhas);
   }, [aulas, turmas, cursos, slots, categoriaFiltro]);
 
-  // =========================================================================
-  // FUNÇÕES DE AÇÃO
-  // =========================================================================
   const adicionarLinha = () => setLinhas([...linhas, criarLinhaVazia()]);
 
   const duplicarLinha = (id_original: string) => {
@@ -326,169 +339,8 @@ export default function ModoPlanilha({
     if (!error) recarregarAulas();
   };
 
-  const calcularConflitos = () => {
-    const conflitos = new Map<string, string[]>();
-    const linhasValidas = linhas.filter((l) => l.dia_semana && l.turma_id);
-
-    const getSlot = (id: string) =>
-      slots.find((s: any) => String(s.id) === String(id));
-    const getTurno = (hora_inicio: string) => {
-      if (!hora_inicio) return null;
-      const hora = parseInt(hora_inicio.split(":")[0]);
-      if (hora < 12) return "MANHA";
-      if (hora < 18) return "TARDE";
-      return "NOITE";
-    };
-    const isPrimeiraDaManha = (hora_inicio: string) =>
-      hora_inicio ? parseInt(hora_inicio.split(":")[0]) <= 8 : false;
-    const isUltimaDaNoite = (hora_fim: string) =>
-      hora_fim ? parseInt(hora_fim.split(":")[0]) >= 22 : false;
-
-    const mapaDias: Record<string, number> = {
-      SEGUNDA: 1,
-      TERCA: 2,
-      QUARTA: 3,
-      QUINTA: 4,
-      SEXTA: 5,
-    };
-    const getDiaAnterior = (dia: string) =>
-      Object.keys(mapaDias).find((k) => mapaDias[k] === mapaDias[dia] - 1);
-    const getDiaSeguinte = (dia: string) =>
-      Object.keys(mapaDias).find((k) => mapaDias[k] === mapaDias[dia] + 1);
-
-    linhasValidas.forEach((aulaAtual) => {
-      const errosDaLinha: string[] = [];
-
-      if (aulaAtual.professor_id && aulaAtual.dia_semana) {
-        const professorResp = professores.find(
-          (p: any) => String(p.id) === String(aulaAtual.professor_id),
-        );
-        if (professorResp && professorResp.dia_planejamento) {
-          if (
-            String(professorResp.dia_planejamento).trim().toUpperCase() ===
-            String(aulaAtual.dia_semana).trim().toUpperCase()
-          ) {
-            errosDaLinha.push(
-              "Bloqueio: Professor está em dia de planejamento.",
-            );
-          }
-        }
-      }
-
-      const slotAtual = getSlot(aulaAtual.slot_horario_id);
-      if (slotAtual) {
-        const turnoAtual = getTurno(slotAtual.hora_inicio);
-        let turnosDoProfessorNoDia = new Set<string>();
-        let aulasDestaDisciplinaNoDia = 0;
-
-        linhasValidas.forEach((outraAula) => {
-          if (String(aulaAtual.id) === String(outraAula.id)) return;
-          const outroSlot = getSlot(outraAula.slot_horario_id);
-          if (!outroSlot) return;
-
-          const mesmoDia = aulaAtual.dia_semana === outraAula.dia_semana;
-          const mesmoHorario =
-            String(aulaAtual.slot_horario_id) ===
-            String(outraAula.slot_horario_id);
-
-          if (mesmoDia && mesmoHorario) {
-            if (
-              aulaAtual.professor_id &&
-              String(aulaAtual.professor_id) === String(outraAula.professor_id)
-            ) {
-              errosDaLinha.push(
-                "Choque: Professor já alocado em outra turma neste horário.",
-              );
-            }
-            if (
-              aulaAtual.turma_id &&
-              String(aulaAtual.turma_id) === String(outraAula.turma_id)
-            ) {
-              errosDaLinha.push(
-                "Choque: Turma já possui outra disciplina neste horário.",
-              );
-            }
-            if (
-              aulaAtual.espaco_id &&
-              String(aulaAtual.espaco_id) === String(outraAula.espaco_id)
-            ) {
-              errosDaLinha.push(
-                "Choque: Sala/Laboratório já ocupado neste horário.",
-              );
-            }
-          }
-
-          if (
-            mesmoDia &&
-            aulaAtual.professor_id &&
-            String(aulaAtual.professor_id) === String(outraAula.professor_id)
-          ) {
-            const outroTurno = getTurno(outroSlot.hora_inicio);
-            if (outroTurno) turnosDoProfessorNoDia.add(outroTurno);
-          }
-
-          if (
-            mesmoDia &&
-            aulaAtual.turma_id &&
-            String(aulaAtual.turma_id) === String(outraAula.turma_id)
-          ) {
-            if (
-              aulaAtual.disciplina_id &&
-              String(aulaAtual.disciplina_id) ===
-                String(outraAula.disciplina_id)
-            ) {
-              aulasDestaDisciplinaNoDia++;
-            }
-          }
-
-          if (
-            aulaAtual.professor_id &&
-            String(aulaAtual.professor_id) === String(outraAula.professor_id)
-          ) {
-            if (
-              isPrimeiraDaManha(slotAtual.hora_inicio) &&
-              outraAula.dia_semana === getDiaAnterior(aulaAtual.dia_semana) &&
-              isUltimaDaNoite(outroSlot.hora_fim)
-            ) {
-              errosDaLinha.push(
-                "Alerta Trabalhista: Sem descanso (Lecionou na última aula da noite passada).",
-              );
-            }
-            if (
-              isUltimaDaNoite(slotAtual.hora_fim) &&
-              outraAula.dia_semana === getDiaSeguinte(aulaAtual.dia_semana) &&
-              isPrimeiraDaManha(outroSlot.hora_inicio)
-            ) {
-              errosDaLinha.push(
-                "Alerta Trabalhista: Sem descanso (Alocado na primeira aula da manhã seguinte).",
-              );
-            }
-          }
-        });
-
-        if (turnoAtual) turnosDoProfessorNoDia.add(turnoAtual);
-        if (turnosDoProfessorNoDia.size > 2)
-          errosDaLinha.push(
-            `Limite: Professor alocado em ${turnosDoProfessorNoDia.size} turnos hoje.`,
-          );
-        if (aulasDestaDisciplinaNoDia + 1 > 2)
-          errosDaLinha.push(
-            "Limite: Mais de 2 aulas geminadas da mesma disciplina hoje.",
-          );
-      }
-
-      if (errosDaLinha.length > 0)
-        conflitos.set(aulaAtual.id, [...new Set(errosDaLinha)]);
-    });
-
-    return conflitos;
-  };
-
-  const mapaDeConflitos = calcularConflitos();
-
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* ABAS DE NAVEGAÇÃO DE MODALIDADES GERADAS DINAMICAMENTE */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap gap-2">
         {categoriasDisponiveis.map((cat) => (
           <button
@@ -561,18 +413,54 @@ export default function ModoPlanilha({
                 linha.dia_semana &&
                 linha.slot_horario_id;
               const linhaRascunho = temDado && !estaCompleta;
-              const erros = mapaDeConflitos.get(linha.id) || [];
-              const temConflito = erros.length > 0;
               const corHexadecimal =
                 mapaCoresTurma.get(String(linha.turma_id)) || "";
 
+              // ==========================================
+              // NOVA LÓGICA DE CORES BASEADA NA VIEW
+              // ==========================================
+              const problemas = choques.filter(
+                (c: any) => c.id_aula_foco === linha.id,
+              );
+              const criticos = problemas.filter((c: any) =>
+                [
+                  "CHOQUE_TURMA",
+                  "CHOQUE_ESPACO",
+                  "CHOQUE_DOCENTE",
+                  "DESCANSO_DOCENTE",
+                  "LIMITE_TURNOS",
+                  "INDISPONIBILIDADE",
+                ].includes(c.tipo_choque),
+              );
+              const alertas = problemas.filter((c: any) =>
+                [
+                  "DIA_PLANEJAMENTO",
+                  "AULAS_GEMINADAS",
+                  "FIM_DE_SEMANA",
+                ].includes(c.tipo_choque),
+              );
+
+              const temCritico = criticos.length > 0;
+              const temAlerta = alertas.length > 0;
+              const temProblema = temCritico || temAlerta;
+
+              // Antes era p.tipo_choque, agora passamos o objeto inteiro 'p' para a função
+              const textosProblemas = problemas.map((p: any) =>
+                mapearMensagem(p),
+              );
+
               let classeLinha =
                 "border-b transition-all group hover:brightness-95 ";
-              if (temConflito)
+              if (temCritico) {
                 classeLinha +=
                   " outline outline-2 outline-offset-[-2px] outline-red-600 z-10 relative";
-              else if (linhaRascunho)
+              } else if (temAlerta) {
+                classeLinha +=
+                  " outline outline-2 outline-offset-[-2px] outline-yellow-400 z-10 relative";
+              } else if (linhaRascunho) {
                 classeLinha += " border-l-4 border-l-yellow-400";
+              }
+              // ==========================================
 
               const turmaObj = turmas.find(
                 (t: any) => String(t.id) === String(linha.turma_id),
@@ -677,12 +565,13 @@ export default function ModoPlanilha({
                   </td>
                   <td className="p-2 text-center">
                     <div className="flex items-center justify-center gap-1.5">
-                      {temConflito && (
+                      {/* ÍCONE DINÂMICO DA VIEW */}
+                      {temProblema && (
                         <span
-                          className="text-red-600 font-bold cursor-help text-lg animate-pulse"
-                          title={erros?.join("\n")}
+                          className="font-bold cursor-help text-lg animate-pulse"
+                          title={textosProblemas.join("\n")}
                         >
-                          ⚠️
+                          {temCritico ? "🔴" : "🟡"}
                         </span>
                       )}
                       <button

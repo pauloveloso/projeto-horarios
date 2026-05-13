@@ -14,12 +14,27 @@ export default function LancamentosPage() {
   const [versaoRascunho, setVersaoRascunho] = useState<any>(null);
 
   const [aulas, setAulas] = useState<any[]>([]);
+  // ==== NOVO ESTADO DA VIEW DE CHOQUES ====
+  const [choques, setChoques] = useState<any[]>([]);
+
   const [turmas, setTurmas] = useState<any[]>([]);
   const [cursos, setCursos] = useState<any[]>([]);
   const [professores, setProfessores] = useState<any[]>([]);
   const [disciplinas, setDisciplinas] = useState<any[]>([]);
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
+
+  // ==== NOVA FUNÇÃO: Busca instantânea dos problemas apontados pela View ====
+  const buscarChoques = async () => {
+    const { data } = await supabase.from("vw_choques_horarios").select("*");
+    if (data) {
+      // Filtramos a regra 8 (Carga Horária) para não ir para a grade (vai para o Dashboard depois)
+      const choquesSemCargaHoraria = data.filter(
+        (c) => c.tipo_choque !== "CARGA_HORARIA",
+      );
+      setChoques(choquesSemCargaHoraria);
+    }
+  };
 
   // ATUALIZADO: Só busca as aulas do rascunho atual com o limite correto
   const buscarAulas = async () => {
@@ -28,8 +43,11 @@ export default function LancamentosPage() {
       .from("aulas")
       .select("*")
       .eq("versao_id", versaoRascunho.id)
-      .limit(5000); // Ponto e vírgula corrigido aqui
+      .limit(5000);
     if (data) setAulas(data);
+
+    // Atualiza os choques sempre que as aulas forem recarregadas manualmente
+    buscarChoques();
   };
 
   useEffect(() => {
@@ -60,7 +78,7 @@ export default function LancamentosPage() {
               .limit(5000)
           : null;
 
-        // 3. Busca todos os dados mestres simultaneamente COM LIMITES ESTENDIDOS
+        // 3. Busca todos os dados mestres simultaneamente (INCLUINDO A VIEW DE CHOQUES)
         const [
           { data: dTurmas },
           { data: dCursos },
@@ -69,6 +87,7 @@ export default function LancamentosPage() {
           { data: dEspacos },
           { data: dSlots },
           respostaAulas,
+          { data: dChoques }, // Busca inicial da view
         ] = await Promise.all([
           supabase.from("turmas").select("*").order("codigo").limit(2000),
           supabase.from("cursos").select("*"),
@@ -77,6 +96,7 @@ export default function LancamentosPage() {
           supabase.from("espacos").select("*").order("nome").limit(1000),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
           queryAulas ? queryAulas : Promise.resolve({ data: [] }),
+          supabase.from("vw_choques_horarios").select("*"),
         ]);
 
         if (!montado) return;
@@ -88,6 +108,8 @@ export default function LancamentosPage() {
         if (dEspacos) setEspacos(dEspacos);
         if (dSlots) setSlots(dSlots);
         if (respostaAulas && respostaAulas.data) setAulas(respostaAulas.data);
+        if (dChoques)
+          setChoques(dChoques.filter((c) => c.tipo_choque !== "CARGA_HORARIA"));
       } catch (error) {
         console.error("Erro ao montar o sistema:", error);
       } finally {
@@ -117,6 +139,11 @@ export default function LancamentosPage() {
                 return listaAntiga;
               }
             }
+
+            // ==== MÁGICA EM TEMPO REAL ====
+            // Se a tabela de aulas mudou, a View também mudou.
+            // Mandamos o Next buscar a lista de choques atualizada.
+            buscarChoques();
 
             if (payload.eventType === "UPDATE") {
               return listaAntiga.map((a) =>
@@ -256,8 +283,9 @@ export default function LancamentosPage() {
         <>
           {modoAtivo === "PLANILHA" && (
             <ModoPlanilha
-              versaoId={versaoRascunho.id} // <-- NOVO: Passando o ID para a planilha
+              versaoId={versaoRascunho.id}
               aulas={aulas}
+              choques={choques} // <-- ENVIANDO PARA A PLANILHA
               turmas={turmas}
               cursos={cursos}
               professores={professores}
@@ -270,8 +298,9 @@ export default function LancamentosPage() {
 
           {modoAtivo === "GRADE" && (
             <ModoGrade
-              versaoId={versaoRascunho.id} // <-- NOVO: Passando o ID para a grade
+              versaoId={versaoRascunho.id}
               aulas={aulas}
+              choques={choques} // <-- ENVIANDO PARA A GRADE
               turmas={turmas}
               cursos={cursos}
               professores={professores}

@@ -155,6 +155,19 @@ export default function HomePage() {
     (v) => String(v.id) === String(versaoSelecionada),
   );
 
+  const getAulasPublico = (diaId: string, slotId: string) => {
+    return dados.aulas.filter(
+      (a: any) =>
+        a.dia_semana === diaId &&
+        String(a.slot_horario_id) === String(slotId) &&
+        (tipoFiltro === "TURMA"
+          ? String(a.turma_id) === String(idSelecionado)
+          : tipoFiltro === "PROFESSOR"
+            ? String(a.professor_id) === String(idSelecionado)
+            : String(a.espaco_id) === String(idSelecionado)),
+    );
+  };
+
   if (carregando && !versaoSelecionada) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
@@ -362,85 +375,119 @@ export default function HomePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {turno.slots.map((slot: any) => (
-                          <tr key={slot.id} className="h-16 print:h-14">
-                            <td className="p-1 border-r border-gray-200 text-center bg-gray-50/50">
-                              <div className="font-black text-gray-700 text-sm">
-                                {formatarHora(slot.hora_inicio)}
-                              </div>
-                              <div className="text-[10px] text-gray-400">
-                                {formatarHora(slot.hora_fim)}
-                              </div>
-                            </td>
-                            {diasSemana.map((dia) => {
-                              const aula = dados.aulas.find(
-                                (a: any) =>
-                                  a.dia_semana === dia.id &&
-                                  String(a.slot_horario_id) ===
-                                    String(slot.id) &&
-                                  (tipoFiltro === "TURMA"
-                                    ? String(a.turma_id) ===
-                                      String(idSelecionado)
-                                    : tipoFiltro === "PROFESSOR"
-                                      ? String(a.professor_id) ===
-                                        String(idSelecionado)
-                                      : String(a.espaco_id) ===
-                                        String(idSelecionado)),
-                              );
-                              if (!aula)
+                        {turno.slots.map((slot: any) => {
+                          const linhaTemChoque = diasSemana.some(
+                            (dia) =>
+                              getAulasPublico(dia.id, slot.id).length > 1,
+                          );
+
+                          return (
+                            <tr
+                              key={slot.id}
+                              className={`${linhaTemChoque ? "h-24 print:h-20" : "h-16 print:h-14"}`}
+                            >
+                              <td className="p-1 border-r border-gray-200 text-center bg-gray-50/50 align-middle">
+                                <div className="font-black text-gray-700 text-sm">
+                                  {formatarHora(slot.hora_inicio)}
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  {formatarHora(slot.hora_fim)}
+                                </div>
+                              </td>
+
+                              {diasSemana.map((dia) => {
+                                const aulasNoSlot = getAulasPublico(
+                                  dia.id,
+                                  slot.id,
+                                );
+
+                                if (aulasNoSlot.length === 0) {
+                                  return (
+                                    <td
+                                      key={dia.id}
+                                      className="border-r border-gray-100 print:border-gray-300"
+                                    ></td>
+                                  );
+                                }
+
+                                const isSplit = aulasNoSlot.length > 1;
+                                const isSingleInTallRow =
+                                  linhaTemChoque && !isSplit;
+
                                 return (
                                   <td
                                     key={dia.id}
-                                    className="border-r border-gray-100 print:border-gray-300"
-                                  ></td>
-                                );
-                              const disc = dados.disciplinas.find(
-                                (d: any) => d.id === aula.disciplina_id,
-                              );
-                              const prof = dados.professores.find(
-                                (p: any) => p.id === aula.professor_id,
-                              );
-                              const sala = dados.espacos.find(
-                                (e: any) => e.id === aula.espaco_id,
-                              );
-                              const turma = dados.turmas.find(
-                                (t: any) => t.id === aula.turma_id,
-                              );
+                                    /* SE FOR SOLTEIRO NA LINHA ALTA, USA ALIGN-MIDDLE. SE FOR NORMAL OU DIVIDIDO, USA ALIGN-TOP */
+                                    className={`p-1 border-r border-gray-100 print:border-gray-300 ${isSingleInTallRow ? "align-middle" : "align-top"}`}
+                                  >
+                                    <div
+                                      className={`flex flex-col w-full gap-1 ${isSplit ? "h-full" : ""}`}
+                                    >
+                                      {aulasNoSlot.map((aula: any) => {
+                                        const disc = dados.disciplinas.find(
+                                          (d: any) =>
+                                            d.id === aula.disciplina_id,
+                                        );
+                                        const prof = dados.professores.find(
+                                          (p: any) =>
+                                            p.id === aula.professor_id,
+                                        );
+                                        const sala = dados.espacos.find(
+                                          (e: any) => e.id === aula.espaco_id,
+                                        );
+                                        const turma = dados.turmas.find(
+                                          (t: any) => t.id === aula.turma_id,
+                                        );
 
-                              return (
-                                <td
-                                  key={dia.id}
-                                  className="p-1 border-r border-gray-100 align-top print:border-gray-300"
-                                >
-                                  {/* Cores dinâmicas removidas, substituídas por bg-gray-50 para visual clean */}
-                                  <div className="h-full w-full rounded p-1.5 flex flex-col justify-center border border-black/5 print:border-gray-300 bg-gray-50">
-                                    <div className="font-black text-xs leading-tight text-gray-900 print:text-[12px] mb-0.5 uppercase">
-                                      {disc?.sigla ? `${disc.sigla} - ` : ""}
-                                      {disc?.nome}
+                                        return (
+                                          <div
+                                            key={aula.id}
+                                            /* FUNDO MAIOR APENAS PARA A AULA SOLTEIRA NA LINHA ALTA (bg-gray-200/50 e py-2) */
+                                            className={`w-full rounded flex flex-col justify-center border border-black/5 print:border-gray-300 min-h-0
+                                              ${isSplit ? "flex-1 p-1 bg-gray-50" : isSingleInTallRow ? "px-1.5 py-2 bg-gray-200/50" : "p-1.5 bg-gray-50"}
+                                            `}
+                                          >
+                                            <div
+                                              className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px] print:text-[10px]" : "text-xs print:text-[12px]"}`}
+                                            >
+                                              {disc?.sigla
+                                                ? `${disc.sigla} - `
+                                                : ""}
+                                              {disc?.nome}
+                                            </div>
+                                            <div className="flex flex-col min-w-0">
+                                              {tipoFiltro !== "PROFESSOR" && (
+                                                <div
+                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                >
+                                                  👤 {prof?.nome || "A definir"}
+                                                </div>
+                                              )}
+                                              {tipoFiltro !== "TURMA" && (
+                                                <div
+                                                  className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                >
+                                                  👥 {turma?.codigo}
+                                                </div>
+                                              )}
+                                              {tipoFiltro !== "ESPACO" && (
+                                                <div
+                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                >
+                                                  📍 {sala?.nome || "S/S"}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
-                                    <div className="space-y-0.5">
-                                      {tipoFiltro !== "PROFESSOR" && (
-                                        <div className="text-[9px] font-bold text-gray-700/90 print:text-[10px] truncate uppercase">
-                                          👤 {prof?.nome || "A definir"}
-                                        </div>
-                                      )}
-                                      {tipoFiltro !== "TURMA" && (
-                                        <div className="text-[9px] font-bold text-gray-700/90 print:text-[10px] uppercase">
-                                          👥 {turma?.codigo}
-                                        </div>
-                                      )}
-                                      {tipoFiltro !== "ESPACO" && (
-                                        <div className="text-[9px] font-bold text-gray-700/90 print:text-[10px] truncate uppercase">
-                                          📍 {sala?.nome || "S/S"}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
