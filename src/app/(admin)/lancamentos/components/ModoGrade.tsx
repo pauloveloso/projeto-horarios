@@ -19,6 +19,7 @@ export default function ModoGrade({
   const [modalAberto, setModalAberto] = useState(false);
   const [dadosModal, setDadosModal] = useState<any>(null);
   const [aulaCopiada, setAulaCopiada] = useState<any>(null);
+  const [aulaArrastada, setAulaArrastada] = useState<any>(null);
 
   const diasDaSemana = [
     { id: "SEGUNDA", label: "Segunda" },
@@ -52,10 +53,6 @@ export default function ModoGrade({
         return "🟡 Atenção: Dia de planejamento do professor.";
       case "AULAS_GEMINADAS":
         return "🟡 Limite: Mais de 2 aulas geminadas desta disciplina.";
-      case "CARGA_INCOMPLETA":
-        return "🟡 Carga Horária: Faltam aulas para esta disciplina.";
-      case "EXCESSO_CARGA":
-        return "🟡 Carga Horária: Disciplina com mais aulas que o permitido.";
       case "FIM_DE_SEMANA":
         return "🟡 Atenção: Professor leciona Sexta à noite e Segunda de manhã.";
       default:
@@ -77,6 +74,51 @@ export default function ModoGrade({
     );
   };
 
+  const handleDragStart = (e: React.DragEvent, aula: any) => {
+    setAulaArrastada(aula);
+    e.dataTransfer.setData("text/plain", aula.id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    setAulaArrastada(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = async (
+    e: React.DragEvent,
+    diaId: string,
+    slotId: string,
+  ) => {
+    e.preventDefault();
+    if (!aulaArrastada) return;
+
+    if (
+      aulaArrastada.dia_semana === diaId &&
+      String(aulaArrastada.slot_horario_id) === String(slotId)
+    ) {
+      setAulaArrastada(null);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("aulas")
+      .update({ dia_semana: diaId, slot_horario_id: slotId })
+      .eq("id", aulaArrastada.id);
+
+    if (error) {
+      alert("Erro ao mover a aula: " + error.message);
+    } else {
+      recarregarAulas();
+    }
+
+    setAulaArrastada(null);
+  };
+
   const handleCellClick = (
     diaId: string,
     slotId: string,
@@ -87,7 +129,7 @@ export default function ModoGrade({
     if (aulaCopiada) {
       if (isOcupado) {
         alert(
-          "Este horário já está ocupado! Escolha uma célula vazia para colar a aula copiada ou clique em 'Cancelar'.",
+          "Este horário já está ocupado! Escolha uma célula vazia ou cancele a cópia.",
         );
       } else {
         colarAula(diaId, slotId);
@@ -247,33 +289,49 @@ export default function ModoGrade({
         </div>
       </div>
 
+      {/* MENSAGEM FLUTUANTE DE CÓPIA (Substituindo o banner estático) */}
+      {/* MENSAGEM FLUTUANTE DE CÓPIA (Larga e Estreita) */}
       {aulaCopiada && (
-        <div className="bg-blue-100 border-b border-blue-300 text-blue-800 p-3 flex justify-between items-center shadow-inner animate-pulse">
-          <span className="text-base font-bold flex items-center gap-2">
-            <span className="text-2xl">⧉</span> MODO DUPLICAÇÃO: Clique num
-            horário vazio abaixo para colar a aula de{" "}
-            {getNome(disciplinas, aulaCopiada.disciplina_id)}.
-          </span>
-          <button
-            onClick={() => setAulaCopiada(null)}
-            className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-blue-700 transition-colors shadow"
-          >
-            Cancelar Cópia
-          </button>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-4xl animate-bounce-short">
+          <div className="bg-blue-600 text-white px-6 py-2.5 rounded-xl shadow-2xl flex justify-between items-center border border-blue-400 backdrop-blur-sm bg-opacity-95">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="bg-white text-blue-600 w-8 h-8 flex items-center justify-center rounded-full animate-pulse shrink-0 shadow-sm">
+                <span className="text-lg leading-none mt-0.5">⧉</span>
+              </div>
+              <p className="text-blue-50 text-[13px] md:text-sm truncate">
+                <strong className="font-black text-white uppercase tracking-wider mr-2">
+                  Modo Duplicação:
+                </strong>
+                Clique num slot vazio para colar{" "}
+                <strong className="underline text-white ml-1">
+                  {getNome(disciplinas, aulaCopiada.disciplina_id)}
+                </strong>
+              </p>
+            </div>
+
+            <button
+              onClick={() => setAulaCopiada(null)}
+              className="ml-4 shrink-0 bg-white text-blue-600 hover:bg-blue-50 px-5 py-1.5 rounded-lg text-xs font-black uppercase transition-all active:scale-95 shadow-sm"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="overflow-x-auto w-full">
-        <table className="w-full text-left border-collapse table-fixed">
+      {/* AJUSTE: Container com scroll interno para permitir o cabeçalho fixo */}
+      <div className="overflow-x-auto overflow-y-auto w-full max-h-[calc(100vh-280px)]">
+        <table className="w-full text-left border-collapse table-fixed select-none">
           <thead>
-            <tr className="bg-green-700 text-white text-sm uppercase tracking-wider">
-              <th className="p-3 border-r border-green-600 w-32 text-center">
+            {/* AJUSTE: Sticky header com z-index alto para ficar por cima das aulas */}
+            <tr className="bg-green-700 text-white text-sm uppercase tracking-wider sticky top-0 z-20">
+              <th className="p-3 border-r border-green-600 w-32 text-center bg-green-700">
                 Horário
               </th>
               {diasDaSemana.map((dia) => (
                 <th
                   key={dia.id}
-                  className="p-3 border-r border-green-600 text-center"
+                  className="p-3 border-r border-green-600 text-center bg-green-700"
                 >
                   {dia.label}
                 </th>
@@ -282,7 +340,6 @@ export default function ModoGrade({
           </thead>
           <tbody className="text-base">
             {slots.map((slot: any) => {
-              // Verifica se QUALQUER dia da semana nesta linha tem choque (para aumentar a altura da linha inteira)
               const linhaTemChoque = diasDaSemana.some(
                 (dia) => getAulasNoSlot(dia.id, slot.id).length > 1,
               );
@@ -304,8 +361,6 @@ export default function ModoGrade({
                     const aulasNoSlot = getAulasNoSlot(dia.id, slot.id);
                     const desabilitado = !filtroTurma;
                     const isCelVazia = aulasNoSlot.length === 0;
-
-                    // Variável que diz se ESTA célula específica está dividida
                     const isSplit = aulasNoSlot.length > 1;
 
                     return (
@@ -314,13 +369,21 @@ export default function ModoGrade({
                         onClick={() =>
                           handleCellClick(dia.id, slot.id, !isCelVazia)
                         }
-                        className={`p-1 border-r border-b border-gray-200 align-top relative transition-all ${linhaTemChoque ? "h-48" : "h-32"} ${desabilitado ? "opacity-40 cursor-not-allowed bg-gray-100" : isCelVazia ? "cursor-pointer bg-gray-50 hover:bg-green-50" : "cursor-pointer bg-white"}`}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, dia.id, slot.id)}
+                        className={`p-1 border-r border-b border-gray-200 align-top relative transition-all ${linhaTemChoque ? "h-48" : "h-32"} ${desabilitado ? "opacity-40 cursor-not-allowed bg-gray-100" : isCelVazia ? "cursor-pointer bg-gray-50 hover:bg-green-50" : "cursor-pointer bg-white"} ${aulaArrastada && !desabilitado ? "bg-blue-50/20" : ""}`}
                       >
                         <div className="flex flex-col h-full w-full gap-1">
                           {aulasNoSlot.map((aula: any) => {
+                            // CORREÇÃO: Filtrando a variável problemas para não incluir carga horária
                             const problemas = choques.filter(
-                              (c: any) => c.id_aula_foco === aula.id,
+                              (c: any) =>
+                                c.id_aula_foco === aula.id &&
+                                c.tipo_choque !== "CARGA_INCOMPLETA" &&
+                                c.tipo_choque !== "EXCESSO_CARGA",
                             );
+
+                            // AJUSTE: Removido alertas de carga horária
                             const temCritico = problemas.some((c: any) =>
                               [
                                 "CHOQUE_TURMA",
@@ -336,8 +399,6 @@ export default function ModoGrade({
                                 "DIA_PLANEJAMENTO",
                                 "AULAS_GEMINADAS",
                                 "FIM_DE_SEMANA",
-                                "CARGA_INCOMPLETA",
-                                "EXCESSO_CARGA",
                               ].includes(c.tipo_choque),
                             );
 
@@ -351,16 +412,21 @@ export default function ModoGrade({
                               corTextoTitulo = "text-yellow-800";
                             }
 
+                            const isSendoArrastada =
+                              aulaArrastada?.id === aula.id;
+
                             return (
                               <div
                                 key={aula.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, aula)}
+                                onDragEnd={handleDragEnd}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   abrirModal(dia.id, slot.id, aula);
                                 }}
-                                className={`group flex-1 ${isSplit ? "p-1 justify-center" : "p-2 justify-between"} border rounded flex flex-col shadow-sm relative overflow-hidden transition-all hover:scale-[1.02] hover:z-10 min-h-0 ${corBgCard}`}
+                                className={`group flex-1 ${isSplit ? "p-1 justify-center" : "p-2 justify-between"} border rounded flex flex-col shadow-sm relative overflow-hidden transition-all hover:scale-[1.02] hover:z-10 min-h-0 ${corBgCard} cursor-grab active:cursor-grabbing ${isSendoArrastada ? "opacity-40 scale-95 border-dashed" : ""}`}
                               >
-                                {/* BOTÕES FLUTUANTES */}
                                 <div
                                   className={`absolute ${isSplit ? "top-0.5 right-0.5 p-0.5" : "top-1 right-1 p-1"} opacity-0 group-hover:opacity-100 flex gap-1 z-20 transition-opacity bg-white/90 rounded`}
                                 >
@@ -386,7 +452,6 @@ export default function ModoGrade({
                                   </button>
                                 </div>
 
-                                {/* ÍCONE SOLTO (Exibido apenas no modo normal) */}
                                 {!isSplit && (temCritico || temAlerta) && (
                                   <div
                                     className="absolute top-1 left-1 cursor-help text-base z-10 animate-pulse drop-shadow-sm"
@@ -398,7 +463,6 @@ export default function ModoGrade({
                                   </div>
                                 )}
 
-                                {/* LINHA 1: Ícone + Disciplina */}
                                 <div
                                   className={`flex items-center gap-1 w-full min-w-0 ${isSplit ? "" : "mt-4"}`}
                                 >
@@ -423,7 +487,6 @@ export default function ModoGrade({
                                   </span>
                                 </div>
 
-                                {/* LINHA 2: Professor e Sala */}
                                 <div
                                   className={`flex flex-col min-w-0 ${isSplit ? "mt-0.5" : "mt-2 space-y-1"}`}
                                 >
@@ -451,11 +514,28 @@ export default function ModoGrade({
                             );
                           })}
 
-                          {isCelVazia && !desabilitado && (
+                          {/* AJUSTE: Opção de cancelar cópia diretamente no slot vazio */}
+                          {isCelVazia && !desabilitado && !aulaArrastada && (
                             <div
-                              className={`h-full w-full flex items-center justify-center opacity-0 hover:opacity-100 font-light text-4xl ${aulaCopiada ? "text-blue-500" : "text-green-600"}`}
+                              className={`h-full w-full flex items-center justify-center opacity-0 hover:opacity-100 font-light transition-all ${aulaCopiada ? "text-blue-500 text-3xl" : "text-green-600 text-4xl"}`}
                             >
-                              {aulaCopiada ? "📋" : "+"}
+                              {aulaCopiada ? (
+                                <div className="flex gap-4">
+                                  <span title="Colar aqui">📋</span>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAulaCopiada(null);
+                                    }}
+                                    className="text-red-600 hover:scale-125 transition-transform font-bold"
+                                    title="Cancelar Cópia"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                "+"
+                              )}
                             </div>
                           )}
                         </div>

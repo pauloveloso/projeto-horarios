@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import NextTopLoader from "nextjs-toploader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,6 +13,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Inicialização da fonte Inter
+const inter = Inter({ subsets: ["latin"] });
+
 export const metadata: Metadata = {
   title: "SGH | IFNMG JANUÁRIA",
   description: "Sistema de Gestão de Horários do IFNMG - Campus Januária",
@@ -19,15 +23,27 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="pt-BR">
+      <body className={inter.className}>
+        {/* Barra de progresso com a cor verde do IFNMG */}
+        <NextTopLoader
+          color="#15803d"
+          initialPosition={0.08}
+          crawlSpeed={200}
+          height={3}
+          crawl={true}
+          showSpinner={false}
+          easing="ease"
+          speed={200}
+          shadow="0 0 10px #15803d,0 0 5px #15803d"
+        />
+
+        {children}
+      </body>
     </html>
   );
 }
