@@ -15,9 +15,14 @@ export default function ModoPlanilha({
   slots,
   recarregarAulas,
 }: any) {
-  const [linhas, setLinhas] = useState<any[]>([]);
+  // AJUSTE: Inicia como true e com 3 linhas vazias para o spinner ficar visível no mount
+  const [isProcessando, setIsProcessando] = useState(true);
+  const [linhas, setLinhas] = useState<any[]>([
+    { id: "1" },
+    { id: "2" },
+    { id: "3" },
+  ]);
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("");
-  const [isProcessando, setIsProcessando] = useState(false);
 
   const formatarHora = (hora: string) => {
     if (!hora) return "";
@@ -36,7 +41,6 @@ export default function ModoPlanilha({
 
   const mapearMensagem = (choque: any) => {
     if (choque.mensagem_customizada) return choque.mensagem_customizada;
-
     switch (choque.tipo_choque) {
       case "CHOQUE_TURMA":
         return "🔴 Choque: Turma já possui aula neste horário.";
@@ -422,152 +426,173 @@ export default function ModoPlanilha({
                     corHexadecimal ? { backgroundColor: corHexadecimal } : {}
                   }
                 >
+                  <td className="p-2 border-r border-gray-300 overflow-hidden text-center">
+                    {linha.turma_id === undefined ? (
+                      ""
+                    ) : (
+                      <select
+                        value={linha.turma_id || ""}
+                        onChange={(e) =>
+                          atualizarCampo(linha.id, "turma_id", e.target.value)
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800"
+                      >
+                        <option value="">Selecione...</option>
+                        {cursos
+                          .filter(
+                            (c: any) =>
+                              getCategoriaCurso(c) === categoriaFiltro,
+                          )
+                          .map((curso: any) => (
+                            <optgroup key={curso.id} label={curso.nome}>
+                              {turmas
+                                .filter(
+                                  (t: any) =>
+                                    String(t.curso_id) === String(curso.id),
+                                )
+                                .map((t: any) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.codigo}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          ))}
+                      </select>
+                    )}
+                  </td>
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      value={linha.turma_id || ""}
-                      onChange={(e) =>
-                        atualizarCampo(linha.id, "turma_id", e.target.value)
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800"
-                    >
-                      <option value="">Selecione...</option>
-                      {cursos
-                        .filter(
-                          (c: any) => getCategoriaCurso(c) === categoriaFiltro,
-                        )
-                        .map((curso: any) => (
-                          <optgroup key={curso.id} label={curso.nome}>
-                            {turmas
-                              .filter(
-                                (t: any) =>
-                                  String(t.curso_id) === String(curso.id),
-                              )
-                              .map((t: any) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.codigo}
-                                </option>
-                              ))}
-                          </optgroup>
+                    {linha.id.length > 2 && (
+                      <select
+                        disabled={!linha.turma_id}
+                        value={linha.disciplina_id || ""}
+                        onChange={(e) =>
+                          atualizarCampo(
+                            linha.id,
+                            "disciplina_id",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800 disabled:opacity-50"
+                      >
+                        <option value="">Selecione...</option>
+                        {dFiltradas.map((d: any) => (
+                          <option key={d.id} value={d.id}>
+                            {d.nome}
+                          </option>
                         ))}
-                    </select>
+                      </select>
+                    )}
                   </td>
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      disabled={!linha.turma_id}
-                      value={linha.disciplina_id || ""}
-                      onChange={(e) =>
-                        atualizarCampo(
-                          linha.id,
-                          "disciplina_id",
-                          e.target.value,
-                        )
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none font-bold text-gray-800 disabled:opacity-50"
-                    >
-                      <option value="">Selecione...</option>
-                      {dFiltradas.map((d: any) => (
-                        <option key={d.id} value={d.id}>
-                          {d.nome}
-                        </option>
-                      ))}
-                    </select>
+                    {linha.id.length > 2 && (
+                      <select
+                        value={linha.professor_id || ""}
+                        onChange={(e) =>
+                          atualizarCampo(
+                            linha.id,
+                            "professor_id",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
+                      >
+                        <option value="">(Nenhum)</option>
+                        {professores.map((p: any) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      value={linha.professor_id || ""}
-                      onChange={(e) =>
-                        atualizarCampo(linha.id, "professor_id", e.target.value)
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
-                    >
-                      <option value="">(Nenhum)</option>
-                      {professores.map((p: any) => (
-                        <option key={p.id} value={p.id}>
-                          {p.nome}
-                        </option>
-                      ))}
-                    </select>
+                    {linha.id.length > 2 && (
+                      <select
+                        value={linha.espaco_id || ""}
+                        onChange={(e) =>
+                          atualizarCampo(linha.id, "espaco_id", e.target.value)
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
+                      >
+                        <option value="">(Nenhum)</option>
+                        {espacos.map((e: any) => (
+                          <option key={e.id} value={e.id}>
+                            {e.nome}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      value={linha.espaco_id || ""}
-                      onChange={(e) =>
-                        atualizarCampo(linha.id, "espaco_id", e.target.value)
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
-                    >
-                      <option value="">(Nenhum)</option>
-                      {espacos.map((e: any) => (
-                        <option key={e.id} value={e.id}>
-                          {e.nome}
-                        </option>
-                      ))}
-                    </select>
+                    {linha.id.length > 2 && (
+                      <select
+                        value={linha.dia_semana || ""}
+                        onChange={(e) =>
+                          atualizarCampo(linha.id, "dia_semana", e.target.value)
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="SEGUNDA">Segunda-feira</option>
+                        <option value="TERCA">Terça-feira</option>
+                        <option value="QUARTA">Quarta-feira</option>
+                        <option value="QUINTA">Quinta-feira</option>
+                        <option value="SEXTA">Sexta-feira</option>
+                      </select>
+                    )}
                   </td>
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      value={linha.dia_semana || ""}
-                      onChange={(e) =>
-                        atualizarCampo(linha.id, "dia_semana", e.target.value)
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
-                    >
-                      <option value="">Selecione...</option>
-                      <option value="SEGUNDA">Segunda-feira</option>
-                      <option value="TERCA">Terça-feira</option>
-                      <option value="QUARTA">Quarta-feira</option>
-                      <option value="QUINTA">Quinta-feira</option>
-                      <option value="SEXTA">Sexta-feira</option>
-                    </select>
-                  </td>
-                  <td className="p-2 border-r border-gray-300 overflow-hidden">
-                    <select
-                      value={linha.slot_horario_id || ""}
-                      onChange={(e) =>
-                        atualizarCampo(
-                          linha.id,
-                          "slot_horario_id",
-                          e.target.value,
-                        )
-                      }
-                      className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
-                    >
-                      <option value="">Selecione...</option>
-                      {slots.map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {formatarHora(s.hora_inicio)} -{" "}
-                          {formatarHora(s.hora_fim)}
-                        </option>
-                      ))}
-                    </select>
+                    {linha.id.length > 2 && (
+                      <select
+                        value={linha.slot_horario_id || ""}
+                        onChange={(e) =>
+                          atualizarCampo(
+                            linha.id,
+                            "slot_horario_id",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
+                      >
+                        <option value="">Selecione...</option>
+                        {slots.map((s: any) => (
+                          <option key={s.id} value={s.id}>
+                            {formatarHora(s.hora_inicio)} -{" "}
+                            {formatarHora(s.hora_fim)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="p-2 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      {(temCritico || temAlerta) && (
-                        <span
-                          className="font-bold cursor-help text-lg animate-pulse"
-                          title={problemas
-                            .map((p: any) => mapearMensagem(p))
-                            .join("\n")}
+                    {linha.id.length > 2 && (
+                      <div className="flex items-center justify-center gap-1.5">
+                        {(temCritico || temAlerta) && (
+                          <span
+                            className="font-bold cursor-help text-lg animate-pulse"
+                            title={problemas
+                              .map((p: any) => mapearMensagem(p))
+                              .join("\n")}
+                          >
+                            {temCritico ? "🔴" : "🟡"}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => duplicarLinha(linha.id)}
+                          className="text-blue-600/60 hover:text-blue-700 font-bold p-1 rounded text-lg"
+                          title="Duplicar"
                         >
-                          {temCritico ? "🔴" : "🟡"}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => duplicarLinha(linha.id)}
-                        className="text-blue-600/60 hover:text-blue-700 font-bold p-1 rounded text-lg"
-                        title="Duplicar"
-                      >
-                        ⧉
-                      </button>
-                      <button
-                        onClick={() => removerLinha(linha.id)}
-                        className="text-red-600/60 hover:text-red-700 font-bold p-1 rounded"
-                        title="Remover"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                          ⧉
+                        </button>
+                        <button
+                          onClick={() => removerLinha(linha.id)}
+                          className="text-red-600/60 hover:text-red-700 font-bold p-1 rounded"
+                          title="Remover"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );
