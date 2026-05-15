@@ -110,7 +110,6 @@ export default function ModoPlanilha({
     return mapa;
   }, [turmas, cursos]);
 
-  // CORREÇÃO APLICADA AQUI: Adicionando as 3 linhas vazias ("esqueleto") para manter a altura da tabela
   const mudarCategoria = (cat: string) => {
     setIsProcessando(true);
     setLinhas([criarLinhaVazia(), criarLinhaVazia(), criarLinhaVazia()]);
@@ -131,8 +130,8 @@ export default function ModoPlanilha({
       };
 
       const ordenarInterno = (a: any, b: any) => {
-        const tA = turmas.find((t) => String(t.id) === String(a.turma_id));
-        const tB = turmas.find((t) => String(t.id) === String(b.turma_id));
+        const tA = turmas.find((t: any) => String(t.id) === String(a.turma_id));
+        const tB = turmas.find((t: any) => String(t.id) === String(b.turma_id));
         const nomeA = (tA?.codigo || "").toUpperCase();
         const nomeB = (tB?.codigo || "").toUpperCase();
         if (nomeA !== nomeB) return nomeA.localeCompare(nomeB);
@@ -140,10 +139,10 @@ export default function ModoPlanilha({
         const diaB = mapaDiasOrdenacao[b.dia_semana] || 99;
         if (diaA !== diaB) return diaA - diaB;
         const sA = slots.find(
-          (s) => String(s.id) === String(a.slot_horario_id),
+          (s: any) => String(s.id) === String(a.slot_horario_id),
         );
         const sB = slots.find(
-          (s) => String(s.id) === String(b.slot_horario_id),
+          (s: any) => String(s.id) === String(b.slot_horario_id),
         );
         return (sA?.hora_inicio || "99:99").localeCompare(
           sB?.hora_inicio || "99:99",
@@ -151,13 +150,13 @@ export default function ModoPlanilha({
       };
 
       const novasLinhas: any[] = [];
-      const cursosOrdenados = [...cursos].sort((a, b) =>
+      const cursosOrdenados = [...cursos].sort((a: any, b: any) =>
         (a.nome || "").localeCompare(b.nome || ""),
       );
 
       if (categoriaFiltro !== "AULAS ÓRFÃS / ERRO DE CADASTRO") {
         const cursosDaCategoria = cursosOrdenados.filter(
-          (c) => getCategoriaCurso(c) === categoriaFiltro,
+          (c: any) => getCategoriaCurso(c) === categoriaFiltro,
         );
 
         if (categoriaFiltro === "INTEGRADO") {
@@ -167,7 +166,7 @@ export default function ModoPlanilha({
               .sort((a: any, b: any) => a.codigo.localeCompare(b.codigo));
             turmasDesteCurso.forEach((turma: any) => {
               const aulasDestaTurma = aulasMapeadas.filter(
-                (a) => String(a.turma_id) === String(turma.id),
+                (a: any) => String(a.turma_id) === String(turma.id),
               );
               if (aulasDestaTurma.length > 0) {
                 aulasDestaTurma.sort(ordenarInterno);
@@ -178,9 +177,9 @@ export default function ModoPlanilha({
           });
         } else {
           cursosDaCategoria.forEach((curso: any) => {
-            const aulasDesteCurso = aulasMapeadas.filter((a) => {
+            const aulasDesteCurso = aulasMapeadas.filter((a: any) => {
               const t = turmas.find(
-                (turma) => String(turma.id) === String(a.turma_id),
+                (turma: any) => String(turma.id) === String(a.turma_id),
               );
               return String(t?.curso_id) === String(curso.id);
             });
@@ -192,13 +191,13 @@ export default function ModoPlanilha({
           });
         }
       } else {
-        const aulasSemCurso = aulasMapeadas.filter((a) => {
+        const aulasSemCurso = aulasMapeadas.filter((a: any) => {
           const t = turmas.find(
-            (turma) => String(turma.id) === String(a.turma_id),
+            (turma: any) => String(turma.id) === String(a.turma_id),
           );
           return (
             !t?.curso_id ||
-            !cursos.some((c) => String(c.id) === String(t.curso_id))
+            !cursos.some((c: any) => String(c.id) === String(t.curso_id))
           );
         });
         if (aulasSemCurso.length > 0) {
@@ -221,10 +220,10 @@ export default function ModoPlanilha({
   const adicionarLinha = () => setLinhas([...linhas, criarLinhaVazia()]);
 
   const duplicarLinha = (id_original: string) => {
-    const linhaParaCopiar = linhas.find((l) => l.id === id_original);
+    const linhaParaCopiar = linhas.find((l: any) => l.id === id_original);
     if (!linhaParaCopiar) return;
     const novaLinha = { ...linhaParaCopiar, id: crypto.randomUUID() };
-    const indexOriginal = linhas.findIndex((l) => l.id === id_original);
+    const indexOriginal = linhas.findIndex((l: any) => l.id === id_original);
     const novasLinhas = [...linhas];
     novasLinhas.splice(indexOriginal + 1, 0, novaLinha);
     setLinhas(novasLinhas);
@@ -239,7 +238,7 @@ export default function ModoPlanilha({
   };
 
   const atualizarCampo = async (id: string, campo: string, valor: string) => {
-    const novasLinhas = linhas.map((linha) => {
+    const novasLinhas = linhas.map((linha: any) => {
       if (linha.id === id) {
         const linhaAtualizada = { ...linha, [campo]: valor };
         if (campo === "turma_id") linhaAtualizada.disciplina_id = "";
@@ -248,7 +247,7 @@ export default function ModoPlanilha({
       return linha;
     });
     setLinhas(novasLinhas);
-    const linhaAtualizada = novasLinhas.find((l) => l.id === id);
+    const linhaAtualizada = novasLinhas.find((l: any) => l.id === id);
     if (
       linhaAtualizada &&
       linhaAtualizada.turma_id &&
@@ -276,7 +275,7 @@ export default function ModoPlanilha({
   };
 
   const removerLinha = async (id: string) => {
-    setLinhas(linhas.filter((l) => l.id !== id));
+    setLinhas(linhas.filter((l: any) => l.id !== id));
     const { error } = await supabase.from("aulas").delete().eq("id", id);
     if (!error) recarregarAulas();
   };
@@ -356,7 +355,7 @@ export default function ModoPlanilha({
             </tr>
           </thead>
           <tbody className="text-sm text-left">
-            {linhas.map((linha) => {
+            {linhas.map((linha: any) => {
               const temDado =
                 linha.turma_id ||
                 linha.disciplina_id ||
@@ -379,7 +378,7 @@ export default function ModoPlanilha({
                   c.tipo_choque !== "EXCESSO_CARGA",
               );
 
-              const temCritico = problemas.some((c) =>
+              const temCritico = problemas.some((c: any) =>
                 [
                   "CHOQUE_TURMA",
                   "CHOQUE_ESPACO",
@@ -389,7 +388,7 @@ export default function ModoPlanilha({
                   "INDISPONIBILIDADE",
                 ].includes(c.tipo_choque),
               );
-              const temAlerta = problemas.some((c) =>
+              const temAlerta = problemas.some((c: any) =>
                 [
                   "DIA_PLANEJAMENTO",
                   "AULAS_GEMINADAS",
@@ -409,7 +408,7 @@ export default function ModoPlanilha({
                 classeLinha += " border-l-4 border-l-yellow-400";
 
               const tObj = turmas.find(
-                (t) => String(t.id) === String(linha.turma_id),
+                (t: any) => String(t.id) === String(linha.turma_id),
               );
               const dFiltradas = tObj?.curso_id
                 ? disciplinasPorCurso.get(String(tObj.curso_id)) || []
@@ -433,14 +432,17 @@ export default function ModoPlanilha({
                     >
                       <option value="">Selecione...</option>
                       {cursos
-                        .filter((c) => getCategoriaCurso(c) === categoriaFiltro)
-                        .map((curso) => (
+                        .filter(
+                          (c: any) => getCategoriaCurso(c) === categoriaFiltro,
+                        )
+                        .map((curso: any) => (
                           <optgroup key={curso.id} label={curso.nome}>
                             {turmas
                               .filter(
-                                (t) => String(t.curso_id) === String(curso.id),
+                                (t: any) =>
+                                  String(t.curso_id) === String(curso.id),
                               )
-                              .map((t) => (
+                              .map((t: any) => (
                                 <option key={t.id} value={t.id}>
                                   {t.codigo}
                                 </option>
@@ -545,7 +547,7 @@ export default function ModoPlanilha({
                         <span
                           className="font-bold cursor-help text-lg animate-pulse"
                           title={problemas
-                            .map((p) => mapearMensagem(p))
+                            .map((p: any) => mapearMensagem(p))
                             .join("\n")}
                         >
                           {temCritico ? "🔴" : "🟡"}
