@@ -450,9 +450,6 @@ export default function HomePage() {
                                             <div
                                               className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px] print:text-[10px]" : "text-xs print:text-[12px]"}`}
                                             >
-                                              {disc?.sigla
-                                                ? `${disc.sigla} - `
-                                                : ""}
                                               {disc?.nome}
                                             </div>
                                             <div className="flex flex-col min-w-0">
