@@ -179,7 +179,8 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-white pb-10">
       <header className="bg-green-800 text-white p-6 shadow-md print:hidden">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row justify-between items-center gap-6">
+          {/* LADO ESQUERDO DO HEADER */}
           <div className="flex items-center gap-4">
             <div>
               <h1 className="text-2xl font-black italic tracking-tighter">
@@ -202,7 +203,7 @@ export default function HomePage() {
                     }}
                     className="bg-green-900 text-green-100 text-[11px] font-bold uppercase rounded border border-green-700 px-2 py-1 outline-none cursor-pointer hover:bg-green-700 transition-colors"
                   >
-                    {versoes.map((v) => {
+                    {versoes.map((v, idx) => {
                       const hoje = new Date().toISOString().split("T")[0];
                       let sufixo = "";
 
@@ -226,7 +227,7 @@ export default function HomePage() {
 
                       return (
                         <option
-                          key={v.id}
+                          key={`versao-${v.id || idx}`}
                           value={v.id}
                           className="bg-white text-gray-800"
                         >
@@ -240,11 +241,24 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 bg-green-900/40 p-4 rounded-xl border border-green-700/50">
+          {/* LADO DIREITO DO HEADER (AÇÕES E NAVEGAÇÃO) */}
+          <div className="flex flex-wrap xl:flex-nowrap items-center justify-center gap-4 bg-green-900/40 p-4 rounded-xl border border-green-700/50 w-full xl:w-auto">
+            {/* BOTÃO ROTA DE RESERVAS */}
+            <Link
+              href="/reservas"
+              className="bg-yellow-400 text-green-950 px-5 py-2.5 rounded-lg font-black text-sm shadow-md hover:bg-yellow-300 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 border border-yellow-500 whitespace-nowrap"
+            >
+              <span>📆</span> Reservar Espaço
+            </Link>
+
+            {/* SEPARADOR VISUAL */}
+            <div className="hidden xl:block w-px h-8 bg-green-700/50 mx-2"></div>
+
+            {/* FILTROS E BUSCA */}
             <div className="flex bg-green-950 rounded-lg p-1">
               {(["TURMA", "PROFESSOR", "ESPACO"] as const).map((t) => (
                 <button
-                  key={t}
+                  key={`btn-filtro-${t}`}
                   onClick={() => {
                     setTipoFiltro(t);
                     setIdSelecionado("");
@@ -259,22 +273,26 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+
             <select
               value={idSelecionado}
               onChange={(e) => setIdSelecionado(e.target.value)}
-              className="bg-white text-gray-800 rounded-lg p-2 text-sm font-bold outline-none border-none w-full sm:w-[280px] shadow-inner truncate"
+              className="bg-white text-gray-800 rounded-lg p-2 text-sm font-bold outline-none border-none w-full sm:w-[250px] shadow-inner truncate h-10"
             >
               <option value="">Escolha...</option>
               {tipoFiltro === "TURMA" &&
-                dados.cursos.map((curso: any) => {
+                dados.cursos.map((curso: any, cIdx: number) => {
                   const turmasDoCurso = dados.turmas.filter(
                     (t: any) => String(t.curso_id) === String(curso.id),
                   );
                   if (turmasDoCurso.length === 0) return null;
                   return (
-                    <optgroup key={curso.id} label={curso.nome}>
-                      {turmasDoCurso.map((t: any) => (
-                        <option key={t.id} value={t.id}>
+                    <optgroup
+                      key={`curso-${curso.id || cIdx}`}
+                      label={curso.nome}
+                    >
+                      {turmasDoCurso.map((t: any, tIdx: number) => (
+                        <option key={`turma-${t.id || tIdx}`} value={t.id}>
                           {t.codigo}
                         </option>
                       ))}
@@ -282,21 +300,21 @@ export default function HomePage() {
                   );
                 })}
               {tipoFiltro === "PROFESSOR" &&
-                dados.professores.map((p: any) => (
-                  <option key={p.id} value={p.id}>
+                dados.professores.map((p: any, pIdx: number) => (
+                  <option key={`prof-${p.id || pIdx}`} value={p.id}>
                     {p.nome}
                   </option>
                 ))}
               {tipoFiltro === "ESPACO" &&
-                dados.categorias.map((cat: any) => {
+                dados.categorias.map((cat: any, catIdx: number) => {
                   const espacosDaCat = dados.espacos.filter(
                     (e: any) => String(e.categoria_id) === String(cat.id),
                   );
                   if (espacosDaCat.length === 0) return null;
                   return (
-                    <optgroup key={cat.id} label={cat.nome}>
-                      {espacosDaCat.map((e: any) => (
-                        <option key={e.id} value={e.id}>
+                    <optgroup key={`cat-${cat.id || catIdx}`} label={cat.nome}>
+                      {espacosDaCat.map((e: any, eIdx: number) => (
+                        <option key={`espaco-${e.id || eIdx}`} value={e.id}>
                           {e.nome}
                         </option>
                       ))}
@@ -304,12 +322,14 @@ export default function HomePage() {
                   );
                 })}
             </select>
+
             <button
               onClick={() => window.print()}
               disabled={!idSelecionado}
-              className="bg-white text-green-800 px-6 py-2 rounded-lg font-black text-sm shadow hover:bg-green-50 transition-all active:scale-95 disabled:opacity-30"
+              className="bg-white text-green-800 px-4 py-2 rounded-lg font-black text-xs shadow hover:bg-green-50 transition-all active:scale-95 disabled:opacity-30 h-10"
+              title="Gerar PDF / Imprimir"
             >
-              GERAR PDF / IMPRIMIR
+              🖨️ IMPRIMIR
             </button>
           </div>
         </div>
@@ -347,11 +367,11 @@ export default function HomePage() {
               )}
             </div>
             {turnos.map(
-              (turno, index) =>
+              (turno, tIdx) =>
                 turno.slots.length > 0 && (
                   <div
-                    key={turno.nome}
-                    className={`overflow-hidden bg-white border border-gray-200 rounded-lg print:border-gray-300 print:rounded-none print:mb-0 ${index > 0 ? "print:break-before-page" : ""}`}
+                    key={`turno-${turno.nome}-${tIdx}`}
+                    className={`overflow-hidden bg-white border border-gray-200 rounded-lg print:border-gray-300 print:rounded-none print:mb-0 ${tIdx > 0 ? "print:break-before-page" : ""}`}
                   >
                     <div className="bg-gray-100 p-2 text-center border-b border-gray-200 print:bg-gray-50">
                       <h3 className="text-sm font-black uppercase text-gray-600 tracking-widest">
@@ -366,7 +386,7 @@ export default function HomePage() {
                           </th>
                           {diasSemana.map((dia) => (
                             <th
-                              key={dia.id}
+                              key={`th-${dia.id}`}
                               className="p-2 border-r border-gray-200 text-center"
                             >
                               {dia.nome}
@@ -375,7 +395,7 @@ export default function HomePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {turno.slots.map((slot: any) => {
+                        {turno.slots.map((slot: any, sIdx: number) => {
                           const linhaTemChoque = diasSemana.some(
                             (dia) =>
                               getAulasPublico(dia.id, slot.id).length > 1,
@@ -383,7 +403,7 @@ export default function HomePage() {
 
                           return (
                             <tr
-                              key={slot.id}
+                              key={`slot-${slot.id || sIdx}`}
                               className={`${linhaTemChoque ? "h-24 print:h-20" : "h-16 print:h-14"}`}
                             >
                               <td className="p-1 border-r border-gray-200 text-center bg-gray-50/50 align-middle">
@@ -404,7 +424,7 @@ export default function HomePage() {
                                 if (aulasNoSlot.length === 0) {
                                   return (
                                     <td
-                                      key={dia.id}
+                                      key={`td-${dia.id}-vazio`}
                                       className="border-r border-gray-100 print:border-gray-300"
                                     ></td>
                                   );
@@ -416,68 +436,69 @@ export default function HomePage() {
 
                                 return (
                                   <td
-                                    key={dia.id}
-                                    /* SE FOR SOLTEIRO NA LINHA ALTA, USA ALIGN-MIDDLE. SE FOR NORMAL OU DIVIDIDO, USA ALIGN-TOP */
+                                    key={`td-${dia.id}`}
                                     className={`p-1 border-r border-gray-100 print:border-gray-300 ${isSingleInTallRow ? "align-middle" : "align-top"}`}
                                   >
                                     <div
                                       className={`flex flex-col w-full gap-1 ${isSplit ? "h-full" : ""}`}
                                     >
-                                      {aulasNoSlot.map((aula: any) => {
-                                        const disc = dados.disciplinas.find(
-                                          (d: any) =>
-                                            d.id === aula.disciplina_id,
-                                        );
-                                        const prof = dados.professores.find(
-                                          (p: any) =>
-                                            p.id === aula.professor_id,
-                                        );
-                                        const sala = dados.espacos.find(
-                                          (e: any) => e.id === aula.espaco_id,
-                                        );
-                                        const turma = dados.turmas.find(
-                                          (t: any) => t.id === aula.turma_id,
-                                        );
+                                      {aulasNoSlot.map(
+                                        (aula: any, aIdx: number) => {
+                                          const disc = dados.disciplinas.find(
+                                            (d: any) =>
+                                              d.id === aula.disciplina_id,
+                                          );
+                                          const prof = dados.professores.find(
+                                            (p: any) =>
+                                              p.id === aula.professor_id,
+                                          );
+                                          const sala = dados.espacos.find(
+                                            (e: any) => e.id === aula.espaco_id,
+                                          );
+                                          const turma = dados.turmas.find(
+                                            (t: any) => t.id === aula.turma_id,
+                                          );
 
-                                        return (
-                                          <div
-                                            key={aula.id}
-                                            /* FUNDO MAIOR APENAS PARA A AULA SOLTEIRA NA LINHA ALTA (bg-gray-200/50 e py-2) */
-                                            className={`w-full rounded flex flex-col justify-center border border-black/5 print:border-gray-300 min-h-0
+                                          return (
+                                            <div
+                                              key={`aula-${aula.id || aIdx}-${aIdx}`}
+                                              className={`w-full rounded flex flex-col justify-center border border-black/5 print:border-gray-300 min-h-0
                                               ${isSplit ? "flex-1 p-1 bg-gray-50" : isSingleInTallRow ? "px-1.5 py-2 bg-gray-200/50" : "p-1.5 bg-gray-50"}
                                             `}
-                                          >
-                                            <div
-                                              className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px] print:text-[10px]" : "text-xs print:text-[12px]"}`}
                                             >
-                                              {disc?.nome}
+                                              <div
+                                                className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px] print:text-[10px]" : "text-xs print:text-[12px]"}`}
+                                              >
+                                                {disc?.nome}
+                                              </div>
+                                              <div className="flex flex-col min-w-0">
+                                                {tipoFiltro !== "PROFESSOR" && (
+                                                  <div
+                                                    className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  >
+                                                    👤{" "}
+                                                    {prof?.nome || "A definir"}
+                                                  </div>
+                                                )}
+                                                {tipoFiltro !== "TURMA" && (
+                                                  <div
+                                                    className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  >
+                                                    👥 {turma?.codigo}
+                                                  </div>
+                                                )}
+                                                {tipoFiltro !== "ESPACO" && (
+                                                  <div
+                                                    className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  >
+                                                    📍 {sala?.nome || "S/S"}
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
-                                            <div className="flex flex-col min-w-0">
-                                              {tipoFiltro !== "PROFESSOR" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
-                                                >
-                                                  👤 {prof?.nome || "A definir"}
-                                                </div>
-                                              )}
-                                              {tipoFiltro !== "TURMA" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
-                                                >
-                                                  👥 {turma?.codigo}
-                                                </div>
-                                              )}
-                                              {tipoFiltro !== "ESPACO" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
-                                                >
-                                                  📍 {sala?.nome || "S/S"}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        },
+                                      )}
                                     </div>
                                   </td>
                                 );
