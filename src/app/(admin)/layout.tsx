@@ -69,6 +69,16 @@ export default function AdminLayout({
         { nome: "Carga Horária", href: "/relatorios/professores", icone: "📈" },
         { nome: "Visualizar Horários", href: "/", icone: "👁️" },
         {
+          nome: "Fichas de Matrícula",
+          href: "/relatorios/fichas",
+          icone: "📑",
+        },
+        {
+          nome: "Quadros de Horários",
+          href: "/relatorios/horarios",
+          icone: "🗓️",
+        },
+        {
           nome: "Exportar PDF Integrado",
           href: "/relatorios/pdf-integrado",
           icone: "📄",
