@@ -11,17 +11,14 @@ export default function QuadrosHorariosPage() {
   const [exportando, setExportando] = useState(false);
   const conteudoRef = useRef<HTMLDivElement>(null);
 
-  // Listas estruturais do banco
   const [versoes, setVersoes] = useState<any[]>([]);
   const [semestres, setSemestres] = useState<string[]>([]);
   const [cursos, setCursos] = useState<any[]>([]);
   const [slotsTotais, setSlotsTotais] = useState<any[]>([]);
 
-  // Filtros selecionados
   const [semestreSelecionado, setSemestreSelecionado] = useState<string>("");
   const [cursoSelecionado, setCursoSelecionado] = useState<string>("");
 
-  // Dados processados para renderização
   const [paginas, setPaginas] = useState<any[]>([]);
   const [versaoAtivaDetalhes, setVersaoAtivaDetalhes] = useState<any>(null);
 
@@ -33,10 +30,20 @@ export default function QuadrosHorariosPage() {
     { id: "SEXTA", nome: "SEXTA" },
   ];
 
-  const formatarSemestre = (sem: string) => {
+  // INTELIGÊNCIA DE CABEÇALHO: Lê o nome do curso para saber se é Anual ou Semestral
+  const formatarSemestreInteligente = (sem: string, nomeCurso: string) => {
     if (!sem || !sem.includes(".")) return sem;
     const [ano, periodo] = sem.split(".");
-    return `PRIMEIRO SEMESTRE LETIVO DE ${ano}`;
+
+    const isIntegrado =
+      nomeCurso?.toLowerCase().includes("integrado") ||
+      nomeCurso?.toLowerCase().includes("técnico");
+
+    if (isIntegrado) {
+      return `ANO LETIVO DE ${ano}`;
+    }
+
+    return `${periodo === "1" ? "PRIMEIRO" : "SEGUNDO"} SEMESTRE LETIVO DE ${ano}`;
   };
 
   useEffect(() => {
@@ -52,16 +59,15 @@ export default function QuadrosHorariosPage() {
         ]);
 
       if (slotsData) setSlotsTotais(slotsData);
-
-      if (cursosData && cursosData.length > 0) {
-        setCursos(cursosData);
-      }
+      if (cursosData && cursosData.length > 0) setCursos(cursosData);
 
       if (versoesData && versoesData.length > 0) {
         setVersoes(versoesData);
+        // Extrai os semestres organizacionais unificados (ex: 2026.1)
         const semestresUnicos = Array.from(
           new Set(versoesData.map((v) => v.semestre)),
         ).filter(Boolean) as string[];
+
         setSemestres(semestresUnicos);
         if (semestresUnicos.length > 0) {
           setSemestreSelecionado(semestresUnicos[0]);
@@ -208,9 +214,6 @@ export default function QuadrosHorariosPage() {
 
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
 
-  // ==========================================
-  // FUNÇÃO DE EXPORTAÇÃO (FOTO PARA PDF LEVE)
-  // ==========================================
   const exportarParaPDF = async () => {
     if (paginas.length === 0) return;
     setExportando(true);
@@ -221,6 +224,8 @@ export default function QuadrosHorariosPage() {
       );
       const nomeCursoLimpo =
         cursoObjeto?.nome.replace(/[^a-zA-Z0-9]/g, "_") || "curso";
+
+      const siglaLimpa = semestreSelecionado.replace(/[^a-zA-Z0-9]/g, "_");
 
       const pdf = new jsPDF({
         orientation: "landscape",
@@ -233,7 +238,6 @@ export default function QuadrosHorariosPage() {
 
       for (let i = 0; i < paginas.length; i++) {
         const folhaElement = document.getElementById(`quadro-pdf-${i}`);
-
         if (!folhaElement) continue;
 
         const canvas = await html2canvas(folhaElement, {
@@ -252,12 +256,10 @@ export default function QuadrosHorariosPage() {
         pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);
       }
 
-      pdf.save(`QUADRO_HORARIOS_${nomeCursoLimpo}_${semestreSelecionado}.pdf`);
+      pdf.save(`QUADRO_HORARIOS_${nomeCursoLimpo}_${siglaLimpa}.pdf`);
     } catch (error) {
       console.error("Erro ao processar exportação para o PDF:", error);
-      alert(
-        "Ocorreu um erro ao gerar o PDF. Verifique os detalhes no console.",
-      );
+      alert("Ocorreu um erro ao gerar o PDF.");
     } finally {
       setExportando(false);
     }
@@ -294,7 +296,10 @@ export default function QuadrosHorariosPage() {
           </h4>
           <p className="font-black text-[14px] mt-1 tracking-wider text-black uppercase">
             {pagina.turma.codigo} - {pagina.turnoNome} -{" "}
-            {formatarSemestre(versaoAtivaDetalhes?.semestre)}
+            {formatarSemestreInteligente(
+              versaoAtivaDetalhes?.semestre,
+              pagina.turma.curso_nome,
+            )}
           </p>
         </div>
 
@@ -359,7 +364,6 @@ export default function QuadrosHorariosPage() {
                         return (
                           <td
                             key={dia.id}
-                            /* Removida a altura fixa aqui. A tabela agora distribui a altura disponível automaticamente! */
                             className="border border-black p-1 align-middle text-center w-1/5 bg-white"
                           >
                             {aula ? (
@@ -438,12 +442,12 @@ export default function QuadrosHorariosPage() {
             <div className="flex flex-wrap items-center gap-4 justify-end">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-bold text-green-200 uppercase tracking-wider">
-                  Semestre:
+                  Semestre (Org):
                 </label>
                 <select
                   value={semestreSelecionado}
                   onChange={(e) => setSemestreSelecionado(e.target.value)}
-                  className="bg-green-800 border border-green-700 text-white rounded px-3 py-2 text-sm font-bold outline-none cursor-pointer focus:border-green-400"
+                  className="bg-green-800 border border-green-700 text-white rounded px-3 py-2 text-sm font-bold outline-none cursor-pointer focus:border-green-400 max-w-[200px] truncate"
                 >
                   {semestres.map((s) => (
                     <option key={s} value={s}>
@@ -515,8 +519,8 @@ export default function QuadrosHorariosPage() {
                 Nenhum horário localizado.
               </p>
               <p className="text-sm text-gray-400 mt-1">
-                Não existem aulas cadastradas para o curso selecionado neste
-                semestre.
+                Não existem aulas cadastradas para o curso selecionado na versão
+                do semestre organizacional {semestreSelecionado}.
               </p>
             </div>
           ) : (

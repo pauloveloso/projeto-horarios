@@ -88,18 +88,15 @@ export default function ReservasPage() {
     async function carregarDadosIniciais() {
       try {
         const [
-          { data: semestres },
+          { data: periodosDb },
           { data: categoriasDb },
           { data: espacosDb },
           { data: slotsDb },
           { data: disciplinasDb },
           { data: turmasDb },
         ] = await Promise.all([
-          supabase
-            .from("configuracoes_semestre")
-            .select("*")
-            .eq("ativo", true)
-            .limit(1),
+          // BUSCA OS PERÍODOS LETIVOS ATIVOS NO NOVO MÓDULO
+          supabase.from("periodos_letivos").select("*").eq("status", "ATIVO"),
           supabase.from("categorias_espacos").select("*").order("nome"),
           supabase.from("espacos").select("*").order("nome"),
           supabase
@@ -111,18 +108,30 @@ export default function ReservasPage() {
           supabase.from("turmas").select("id, codigo"),
         ]);
 
-        if (semestres && semestres.length > 0) {
-          const sem = semestres[0];
-          setSemestreAtivo(sem);
+        // LÓGICA DE ENVELOPE: Junta os períodos ativos (ex: Integrado e Superior) num único intervalo
+        if (periodosDb && periodosDb.length > 0) {
+          let minData = new Date("2999-12-31T00:00:00");
+          let maxData = new Date("2000-01-01T23:59:59");
+          let nomesPeriodos: string[] = [];
+
+          periodosDb.forEach((p) => {
+            const dInicio = new Date(p.data_inicio + "T00:00:00");
+            const dFim = new Date(p.data_fim + "T23:59:59");
+            if (dInicio < minData) minData = dInicio;
+            if (dFim > maxData) maxData = dFim;
+            nomesPeriodos.push(p.sigla);
+          });
+
+          const semVirtual = {
+            data_inicio: minData.toISOString().split("T")[0],
+            data_fim: maxData.toISOString().split("T")[0],
+            nome_semestre: nomesPeriodos.join(" / "),
+          };
+
+          setSemestreAtivo(semVirtual);
           const hoje = new Date();
-          const inicioSemestre = new Date(sem.data_inicio + "T00:00:00");
-          const fimSemestre = new Date(sem.data_fim + "T23:59:59");
           let dataAlvo =
-            hoje < inicioSemestre
-              ? inicioSemestre
-              : hoje > fimSemestre
-                ? fimSemestre
-                : hoje;
+            hoje < minData ? minData : hoje > maxData ? maxData : hoje;
 
           setDataBusca(dataAlvo.toISOString().split("T")[0]);
 
@@ -995,7 +1004,7 @@ export default function ReservasPage() {
                         </button>
                         <div className="text-center leading-tight">
                           <span className="text-[9px] font-black uppercase text-green-200 tracking-widest block">
-                            Semestre: {semestreAtivo.nome_semestre}
+                            Vigência: {semestreAtivo.nome_semestre}
                           </span>
                           <span className="text-sm font-black">
                             {obterDataDoDiaDaSemana(0).toLocaleDateString(

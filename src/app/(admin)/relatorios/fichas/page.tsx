@@ -11,17 +11,14 @@ export default function FichasMatriculaPage() {
   const [exportando, setExportando] = useState(false);
   const conteudoRef = useRef<HTMLDivElement>(null);
 
-  // Listas estruturais do banco
   const [versoes, setVersoes] = useState<any[]>([]);
   const [semestres, setSemestres] = useState<string[]>([]);
   const [cursos, setCursos] = useState<any[]>([]);
   const [slotsTotais, setSlotsTotais] = useState<any[]>([]);
 
-  // Filtros selecionados
   const [semestreSelecionado, setSemestreSelecionado] = useState<string>("");
   const [cursoSelecionado, setCursoSelecionado] = useState<string>("");
 
-  // Dados processados para renderização
   const [paginas, setPaginas] = useState<any[]>([]);
   const [versaoAtivaDetalhes, setVersaoAtivaDetalhes] = useState<any>(null);
 
@@ -33,9 +30,19 @@ export default function FichasMatriculaPage() {
     { id: "SEXTA", nome: "SEXTA" },
   ];
 
-  const formatarSemestre = (sem: string) => {
+  // INTELIGÊNCIA DE CABEÇALHO: Lê o nome do curso para saber se é Anual ou Semestral
+  const formatarSemestreInteligente = (sem: string, nomeCurso: string) => {
     if (!sem || !sem.includes(".")) return sem;
     const [ano, periodo] = sem.split(".");
+
+    const isIntegrado =
+      nomeCurso?.toLowerCase().includes("integrado") ||
+      nomeCurso?.toLowerCase().includes("técnico");
+
+    if (isIntegrado) {
+      return `ANO LETIVO DE ${ano}`;
+    }
+
     return `${periodo}º SEMESTRE LETIVO / ${ano}`;
   };
 
@@ -52,17 +59,15 @@ export default function FichasMatriculaPage() {
         ]);
 
       if (slotsData) setSlotsTotais(slotsData);
-
-      if (cursosData && cursosData.length > 0) {
-        setCursos(cursosData);
-        // Removida a autoseleção do curso para iniciar vazio
-      }
+      if (cursosData && cursosData.length > 0) setCursos(cursosData);
 
       if (versoesData && versoesData.length > 0) {
         setVersoes(versoesData);
+        // Volta a extrair os semestres organizacionais unificados (ex: 2026.1)
         const semestresUnicos = Array.from(
           new Set(versoesData.map((v) => v.semestre)),
         ).filter(Boolean) as string[];
+
         setSemestres(semestresUnicos);
         if (semestresUnicos.length > 0) {
           setSemestreSelecionado(semestresUnicos[0]);
@@ -209,9 +214,6 @@ export default function FichasMatriculaPage() {
 
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
 
-  // ==========================================
-  // FUNÇÃO DE EXPORTAÇÃO "FOTO" PARA PDF (OTIMIZADA)
-  // ==========================================
   const exportarParaPDF = async () => {
     if (paginas.length === 0) return;
     setExportando(true);
@@ -223,7 +225,8 @@ export default function FichasMatriculaPage() {
       const nomeCursoLimpo =
         cursoObjeto?.nome.replace(/[^a-zA-Z0-9]/g, "_") || "curso";
 
-      // Instancia o PDF com a compressão nativa ativada
+      const siglaLimpa = semestreSelecionado.replace(/[^a-zA-Z0-9]/g, "_");
+
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -231,16 +234,12 @@ export default function FichasMatriculaPage() {
         compress: true,
       });
 
-      // Volta o scroll da página ao topo
       window.scrollTo(0, 0);
 
-      // Laço iterando pelo número de páginas
       for (let i = 0; i < paginas.length; i++) {
         const folhaElement = document.getElementById(`folha-pdf-${i}`);
-
         if (!folhaElement) continue;
 
-        // Captura a imagem
         const canvas = await html2canvas(folhaElement, {
           scale: 1.5,
           useCORS: true,
@@ -254,17 +253,13 @@ export default function FichasMatriculaPage() {
         const imgData = canvas.toDataURL("image/jpeg", 0.75);
 
         if (i > 0) pdf.addPage();
-
-        // Insere a foto no PDF sinalizando que é JPEG
         pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);
       }
 
-      pdf.save(`FICHAS_MATRICULA_${nomeCursoLimpo}_${semestreSelecionado}.pdf`);
+      pdf.save(`FICHAS_MATRICULA_${nomeCursoLimpo}_${siglaLimpa}.pdf`);
     } catch (error) {
       console.error("Erro ao processar exportação para o PDF:", error);
-      alert(
-        "Ocorreu um erro ao gerar o PDF. Verifique os detalhes no console.",
-      );
+      alert("Ocorreu um erro ao gerar o PDF.");
     } finally {
       setExportando(false);
     }
@@ -311,7 +306,10 @@ export default function FichasMatriculaPage() {
               COORDENAÇÃO DO CURSO DE {pagina.turma.curso_nome}
             </p>
             <p className="font-bold uppercase">
-              {formatarSemestre(versaoAtivaDetalhes?.semestre)}
+              {formatarSemestreInteligente(
+                versaoAtivaDetalhes?.semestre,
+                pagina.turma.curso_nome,
+              )}
             </p>
             <p className="font-black text-xl mt-0.5 tracking-wider text-black">
               {pagina.turma.codigo}
@@ -490,7 +488,6 @@ export default function FichasMatriculaPage() {
             flex-direction: column;
             justify-content: space-between;
           }
-
           .dynamic-footer {
             margin-top: auto;
           }
@@ -521,12 +518,12 @@ export default function FichasMatriculaPage() {
             <div className="flex flex-wrap items-center gap-4 justify-end">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-bold text-green-200 uppercase tracking-wider">
-                  Semestre:
+                  Semestre (Org):
                 </label>
                 <select
                   value={semestreSelecionado}
                   onChange={(e) => setSemestreSelecionado(e.target.value)}
-                  className="bg-green-800 border border-green-700 text-white rounded px-3 py-2 text-sm font-bold outline-none cursor-pointer focus:border-green-400"
+                  className="bg-green-800 border border-green-700 text-white rounded px-3 py-2 text-sm font-bold outline-none cursor-pointer focus:border-green-400 max-w-[200px] truncate"
                 >
                   {semestres.map((s) => (
                     <option key={s} value={s}>
@@ -599,7 +596,7 @@ export default function FichasMatriculaPage() {
               </p>
               <p className="text-sm text-gray-400 mt-1">
                 Não existem aulas cadastradas para o curso selecionado na versão
-                do semestre {semestreSelecionado}.
+                do semestre organizacional {semestreSelecionado}.
               </p>
             </div>
           ) : (

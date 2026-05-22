@@ -88,6 +88,7 @@ export default function AdminLayout({
     {
       titulo: "Base de Dados",
       itens: [
+        { nome: "Períodos Letivos", href: "/cadastros/periodos", icone: "📅" },
         { nome: "Cursos e Turmas", href: "/cadastros/cursos", icone: "🎓" },
         { nome: "Disciplinas", href: "/cadastros/disciplinas", icone: "📚" },
         { nome: "Professores", href: "/cadastros/professores", icone: "👨‍🏫" },
