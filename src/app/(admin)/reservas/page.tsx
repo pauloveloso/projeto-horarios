@@ -704,7 +704,7 @@ export default function ReservasPage() {
           </div>
           <div className="flex items-center bg-green-900/40 px-3 py-2 rounded-xl border border-green-700/50">
             <Link
-              href="/"
+              href="/painel"
               className="bg-white text-green-800 px-3 py-1.5 rounded text-xs font-bold shadow-sm hover:bg-green-50 transition-all active:scale-95 flex items-center gap-2"
             >
               <span>⬅</span> Voltar

@@ -67,7 +67,11 @@ export default function AdminLayout({
         { nome: "Lançamentos", href: "/lancamentos", icone: "🗓️" },
         { nome: "Gestão de Versões", href: "/cadastros/versoes", icone: "🔄" },
         { nome: "Carga Horária", href: "/relatorios/professores", icone: "📈" },
-        { nome: "Visualizar Horários", href: "/", icone: "👁️" },
+        {
+          nome: "Visualizar Horários",
+          href: "/relatorios/visualizar-horarios",
+          icone: "👁️",
+        },
         {
           nome: "Fichas de Matrícula",
           href: "/relatorios/fichas",
@@ -83,6 +87,8 @@ export default function AdminLayout({
           href: "/relatorios/pdf-integrado",
           icone: "📄",
         },
+
+        { nome: "Reserva de Espaços", href: "/reservas", icone: "📅" },
       ],
     },
     {

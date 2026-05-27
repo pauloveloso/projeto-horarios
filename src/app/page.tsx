@@ -274,13 +274,6 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-wrap xl:flex-nowrap items-center justify-center gap-4 bg-green-900/40 p-4 rounded-xl border border-green-700/50 w-full xl:w-auto">
-            <Link
-              href="/reservas"
-              className="bg-yellow-400 text-green-950 px-5 py-2.5 rounded-lg font-black text-sm shadow-md hover:bg-yellow-300 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 border border-yellow-500 whitespace-nowrap"
-            >
-              <span>📆</span> Reservar Espaço
-            </Link>
-
             <div className="hidden xl:block w-px h-8 bg-green-700/50 mx-2"></div>
 
             <div className="flex bg-green-950 rounded-lg p-1">
