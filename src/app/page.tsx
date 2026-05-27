@@ -151,7 +151,7 @@ export default function HomePage() {
     );
   };
 
-  // --- NOVA LÓGICA DE TURNOS ---
+  // --- LÓGICA DE TURNOS E HORÁRIOS EXTRAS ---
   // 1. Pegar todas as aulas do filtro selecionado
   const aulasDoFiltro = dados.aulas.filter((a: any) => {
     if (tipoFiltro === "TURMA")
@@ -184,10 +184,22 @@ export default function HomePage() {
     },
   ];
 
-  // 4. Filtrar para manter apenas os turnos que possuem pelo menos um slot ocupado
-  const turnosOcupados = todosTurnos.filter((turno) =>
-    turno.slots.some((slot: any) => slotsOcupadosIds.has(String(slot.id))),
-  );
+  // 4. Filtrar turnos ocupados E limpar os horários 5/6 vazios
+  const turnosOcupados = todosTurnos
+    .filter((turno) =>
+      turno.slots.some((slot: any) => slotsOcupadosIds.has(String(slot.id))),
+    )
+    .map((turno) => {
+      return {
+        ...turno,
+        slots: turno.slots.filter((slot: any, index: number) => {
+          // Mantém os 4 primeiros horários (índices 0, 1, 2, 3) sempre.
+          if (index < 4) return true;
+          // Para o 5º, 6º, etc., só mantém se houver aula neles.
+          return slotsOcupadosIds.has(String(slot.id));
+        }),
+      };
+    });
 
   if (carregando && !versaoSelecionada) {
     return (
@@ -201,7 +213,6 @@ export default function HomePage() {
     <div className="min-h-screen bg-white pb-10">
       <header className="bg-green-800 text-white p-6 shadow-md print:hidden">
         <div className="max-w-7xl mx-auto flex flex-col xl:flex-row justify-between items-center gap-6">
-          {/* LADO ESQUERDO DO HEADER */}
           <div className="flex items-center gap-4">
             <div>
               <h1 className="text-2xl font-black italic tracking-tighter">
@@ -262,9 +273,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* LADO DIREITO DO HEADER (AÇÕES E NAVEGAÇÃO) */}
           <div className="flex flex-wrap xl:flex-nowrap items-center justify-center gap-4 bg-green-900/40 p-4 rounded-xl border border-green-700/50 w-full xl:w-auto">
-            {/* BOTÃO ROTA DE RESERVAS */}
             <Link
               href="/reservas"
               className="bg-yellow-400 text-green-950 px-5 py-2.5 rounded-lg font-black text-sm shadow-md hover:bg-yellow-300 hover:shadow-lg hover:-translate-y-0.5 transition-all active:scale-95 flex items-center gap-2 border border-yellow-500 whitespace-nowrap"
@@ -272,10 +281,8 @@ export default function HomePage() {
               <span>📆</span> Reservar Espaço
             </Link>
 
-            {/* SEPARADOR VISUAL */}
             <div className="hidden xl:block w-px h-8 bg-green-700/50 mx-2"></div>
 
-            {/* FILTROS E BUSCA */}
             <div className="flex bg-green-950 rounded-lg p-1">
               {(["TURMA", "PROFESSOR", "ESPACO"] as const).map((t) => (
                 <button
@@ -388,7 +395,6 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* MENSAGEM SE NÃO HOUVER AULAS */}
             {turnosOcupados.length === 0 ? (
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center text-gray-500 my-8">
                 <span className="text-5xl block mb-4">📭</span>
@@ -401,7 +407,6 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              /* RENDERIZA APENAS OS TURNOS OCUPADOS */
               turnosOcupados.map((turno, tIdx) => (
                 <div
                   key={`turno-${turno.nome}-${tIdx}`}
