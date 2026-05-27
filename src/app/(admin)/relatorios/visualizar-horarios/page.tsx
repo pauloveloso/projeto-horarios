@@ -498,9 +498,7 @@ export default function VisualizarHorariosAdminPage() {
                                               </div>
                                             )}
                                             {tipoFiltro !== "TURMA" && (
-                                              <div>
-                                                Comunidade {turma?.codigo}
-                                              </div>
+                                              <div>👥 {turma?.codigo}</div>
                                             )}
                                             {tipoFiltro !== "ESPACO" && (
                                               <div>
