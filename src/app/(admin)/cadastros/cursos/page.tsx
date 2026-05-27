@@ -606,9 +606,9 @@ export default function CursosPage() {
                     }
                     className="w-full border border-gray-300 rounded p-2 text-base outline-none focus:ring-2 focus:ring-green-500 bg-white"
                   >
-                    <option value="MANHA">Manhã</option>
-                    <option value="TARDE">Tarde</option>
-                    <option value="NOITE">Noite</option>
+                    <option value="MATUTINO">Matutino</option>
+                    <option value="VESPERTINO">Vespertino</option>
+                    <option value="NOTURNO">Noturno</option>
                     <option value="INTEGRAL">Integral</option>
                   </select>
                 </div>

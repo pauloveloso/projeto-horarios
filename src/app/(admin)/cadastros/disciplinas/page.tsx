@@ -90,7 +90,13 @@ export default function DisciplinasPage() {
   // ==========================================================================
   const abrirModalDisciplina = (disciplina: any = null) => {
     if (disciplina) {
-      setDadosDisciplina({ ...disciplina });
+      // GARANTE QUE VALORES NULL DO BANCO SE TORNEM STRING VAZIA PARA O INPUT REACT
+      setDadosDisciplina({
+        ...disciplina,
+        nome: disciplina.nome || "",
+        sigla: disciplina.sigla || "", // Aqui evitamos o React Console Error
+        carga_horaria_semanal: disciplina.carga_horaria_semanal || 2,
+      });
     } else {
       setDadosDisciplina({
         id: null,
@@ -105,11 +111,22 @@ export default function DisciplinasPage() {
   const salvarDisciplina = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // PAYLOAD LIMPO: Envia apenas os campos exatos da tabela
+    // PAYLOAD LIMPO: Protegemos o trim() com o Optional Chaining (?.trim()) ou garantindo que seja string
+    const siglaLimpa = dadosDisciplina.sigla
+      ? dadosDisciplina.sigla.trim().toUpperCase()
+      : null;
+    const nomeLimpo = dadosDisciplina.nome ? dadosDisciplina.nome.trim() : "";
+
+    if (!nomeLimpo) {
+      alert("O nome da disciplina é obrigatório.");
+      return;
+    }
+
     const payload = {
-      nome: dadosDisciplina.nome.trim(),
-      sigla: dadosDisciplina.sigla.trim().toUpperCase(),
-      carga_horaria_semanal: parseInt(dadosDisciplina.carga_horaria_semanal),
+      nome: nomeLimpo,
+      sigla: siglaLimpa, // Salva como NULL no banco se estiver vazio, evitando sujeira ("")
+      carga_horaria_semanal:
+        parseInt(dadosDisciplina.carga_horaria_semanal) || 2,
       curso_id: cursoSelecionado,
     };
 
@@ -124,7 +141,7 @@ export default function DisciplinasPage() {
       console.error(error);
     } else {
       setModalDisciplina(false);
-      recarregarDados(); // Dupla garantia de sincronização
+      recarregarDados();
     }
   };
 
