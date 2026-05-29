@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas-pro";
 
 export default function HomePage() {
   const [carregando, setCarregando] = useState(true);
+  const [gerandoPDF, setGerandoPDF] = useState(false);
   const [logado, setLogado] = useState(false);
 
   const [versoes, setVersoes] = useState<any[]>([]);
@@ -26,6 +29,9 @@ export default function HomePage() {
     "TURMA" | "PROFESSOR" | "ESPACO"
   >("TURMA");
   const [idSelecionado, setIdSelecionado] = useState<string>("");
+
+  // Referência para o motor de PDF "fotografar" a área correta
+  const relatorioRef = useRef<HTMLDivElement>(null);
 
   const diasSemana = [
     { id: "SEGUNDA", nome: "Segunda" },
@@ -151,8 +157,6 @@ export default function HomePage() {
     );
   };
 
-  // --- LÓGICA DE TURNOS E HORÁRIOS EXTRAS ---
-  // 1. Pegar todas as aulas do filtro selecionado
   const aulasDoFiltro = dados.aulas.filter((a: any) => {
     if (tipoFiltro === "TURMA")
       return String(a.turma_id) === String(idSelecionado);
@@ -161,12 +165,10 @@ export default function HomePage() {
     return String(a.espaco_id) === String(idSelecionado);
   });
 
-  // 2. Mapear os IDs dos slots ocupados por essas aulas
   const slotsOcupadosIds = new Set(
     aulasDoFiltro.map((a: any) => String(a.slot_horario_id)),
   );
 
-  // 3. Estruturar os turnos
   const todosTurnos = [
     {
       nome: "Manhã",
@@ -184,7 +186,6 @@ export default function HomePage() {
     },
   ];
 
-  // 4. Filtrar turnos ocupados E limpar os horários 5/6 vazios
   const turnosOcupados = todosTurnos
     .filter((turno) =>
       turno.slots.some((slot: any) => slotsOcupadosIds.has(String(slot.id))),
@@ -193,13 +194,85 @@ export default function HomePage() {
       return {
         ...turno,
         slots: turno.slots.filter((slot: any, index: number) => {
-          // Mantém os 4 primeiros horários (índices 0, 1, 2, 3) sempre.
           if (index < 4) return true;
-          // Para o 5º, 6º, etc., só mantém se houver aula neles.
           return slotsOcupadosIds.has(String(slot.id));
         }),
       };
     });
+
+  // ========================================================================
+  // MOTOR DE EXPORTAÇÃO PDF - PÁGINA ÚNICA E COMPACTO
+  // ========================================================================
+  const gerarPDF = async () => {
+    if (!relatorioRef.current) return;
+    setGerandoPDF(true);
+
+    try {
+      const elemento = relatorioRef.current;
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      // Dimensões úteis da página (A4 Paisagem: 297x210)
+      const margin = 10;
+      const maxPdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const maxPdfHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+
+      // Tira 1 fotografia inteira de toda a área referenciada
+      const canvas = await html2canvas(elemento, {
+        scale: 1.5, // Resolução ótima vs Tamanho de arquivo
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.75); // Compressão leve
+
+      // Calcula as proporções
+      const imgRatio = canvas.height / canvas.width;
+      let imgWidth = maxPdfWidth;
+      let imgHeight = imgWidth * imgRatio;
+
+      // MÁGICA DO "FIT TO PAGE": Se a foto for mais alta que a página,
+      // nós reduzimos o tamanho dela proporcionalmente para forçar a caber!
+      if (imgHeight > maxPdfHeight) {
+        imgHeight = maxPdfHeight;
+        imgWidth = imgHeight / imgRatio;
+      }
+
+      // Centraliza a imagem vertical e horizontalmente caso sobre espaço
+      const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
+      const yOffset = margin;
+
+      // Desenha na única página gerada
+      pdf.addImage(
+        imgData,
+        "JPEG",
+        xOffset,
+        yOffset,
+        imgWidth,
+        imgHeight,
+        undefined,
+        "FAST",
+      );
+
+      const tituloSeguro =
+        obterTituloGrade()
+          .replace(/[^a-zA-Z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .toLowerCase() || "horarios";
+      pdf.save(`IFNMG_${tituloSeguro}.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Ocorreu um erro ao exportar o PDF. Tente novamente.");
+    } finally {
+      setGerandoPDF(false);
+    }
+  };
 
   if (carregando && !versaoSelecionada) {
     return (
@@ -345,12 +418,21 @@ export default function HomePage() {
             </select>
 
             <button
-              onClick={() => window.print()}
-              disabled={!idSelecionado || turnosOcupados.length === 0}
-              className="bg-white text-green-800 px-4 py-2 rounded-lg font-black text-xs shadow hover:bg-green-50 transition-all active:scale-95 disabled:opacity-30 h-10"
-              title="Gerar PDF / Imprimir"
+              onClick={gerarPDF}
+              disabled={
+                !idSelecionado || turnosOcupados.length === 0 || gerandoPDF
+              }
+              className="bg-white text-green-800 px-4 py-2 rounded-lg font-black text-xs shadow hover:bg-green-50 transition-all active:scale-95 disabled:opacity-30 h-10 flex items-center justify-center min-w-[130px]"
+              title="Baixar PDF"
             >
-              🖨️ IMPRIMIR
+              {gerandoPDF ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-green-800 border-t-transparent rounded-full animate-spin"></div>
+                  Gerando...
+                </span>
+              ) : (
+                "🖨️ BAIXAR PDF"
+              )}
             </button>
           </div>
         </div>
@@ -370,9 +452,9 @@ export default function HomePage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6 print:space-y-0">
-            <div className="text-center py-4 print:py-0 print:mb-4">
-              <h2 className="text-3xl font-black text-gray-800 uppercase print:text-xl">
+          <div ref={relatorioRef} className="space-y-6 bg-white p-4">
+            <div className="text-center py-4 bg-white">
+              <h2 className="text-3xl font-black text-gray-800 uppercase">
                 {obterTituloGrade()}
               </h2>
               {infoVersao && (
@@ -403,9 +485,9 @@ export default function HomePage() {
               turnosOcupados.map((turno, tIdx) => (
                 <div
                   key={`turno-${turno.nome}-${tIdx}`}
-                  className={`overflow-hidden bg-white border border-gray-200 rounded-lg print:border-gray-300 print:rounded-none print:mb-0 ${tIdx > 0 ? "print:break-before-page" : ""}`}
+                  className="overflow-hidden bg-white border border-gray-200 rounded-lg"
                 >
-                  <div className="bg-gray-100 p-2 text-center border-b border-gray-200 print:bg-gray-50">
+                  <div className="bg-gray-100 p-2 text-center border-b border-gray-200">
                     <h3 className="text-sm font-black uppercase text-gray-600 tracking-widest">
                       {turno.nome}
                     </h3>
@@ -435,7 +517,7 @@ export default function HomePage() {
                         return (
                           <tr
                             key={`slot-${slot.id || sIdx}`}
-                            className={`${linhaTemChoque ? "h-24 print:h-20" : "h-16 print:h-14"}`}
+                            className={`${linhaTemChoque ? "h-24" : "h-16"}`}
                           >
                             <td className="p-1 border-r border-gray-200 text-center bg-gray-50/50 align-middle">
                               <div className="font-black text-gray-700 text-sm">
@@ -456,7 +538,7 @@ export default function HomePage() {
                                 return (
                                   <td
                                     key={`td-${dia.id}-vazio`}
-                                    className="border-r border-gray-100 print:border-gray-300"
+                                    className="border-r border-gray-100"
                                   ></td>
                                 );
                               }
@@ -468,7 +550,7 @@ export default function HomePage() {
                               return (
                                 <td
                                   key={`td-${dia.id}`}
-                                  className={`p-1 border-r border-gray-100 print:border-gray-300 ${isSingleInTallRow ? "align-middle" : "align-top"}`}
+                                  className={`p-1 border-r border-gray-100 bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
                                 >
                                   <div
                                     className={`flex flex-col w-full gap-1 ${isSplit ? "h-full" : ""}`}
@@ -493,33 +575,34 @@ export default function HomePage() {
                                         return (
                                           <div
                                             key={`aula-${aula.id || aIdx}-${aIdx}`}
-                                            className={`w-full rounded flex flex-col justify-center border border-black/5 print:border-gray-300 min-h-0
-                                                ${isSplit ? "flex-1 p-1 bg-gray-50" : isSingleInTallRow ? "px-1.5 py-2 bg-gray-200/50" : "p-1.5 bg-gray-50"}
+                                            className={`w-full rounded flex flex-col justify-center border border-black/5 min-h-0
+                                                ${isSplit ? "flex-1 p-1 bg-gray-50" : "p-1.5 bg-gray-50"}
+                                                ${isSingleInTallRow ? "px-1.5 py-2" : ""}
                                               `}
                                           >
                                             <div
-                                              className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px] print:text-[10px]" : "text-xs print:text-[12px]"}`}
+                                              className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px]" : "text-xs"}`}
                                             >
                                               {disc?.nome}
                                             </div>
                                             <div className="flex flex-col min-w-0">
                                               {tipoFiltro !== "PROFESSOR" && (
                                                 <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
                                                 >
                                                   👤 {prof?.nome || "A definir"}
                                                 </div>
                                               )}
                                               {tipoFiltro !== "TURMA" && (
                                                 <div
-                                                  className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
                                                 >
                                                   👥 {turma?.codigo}
                                                 </div>
                                               )}
                                               {tipoFiltro !== "ESPACO" && (
                                                 <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px] print:text-[8px]" : "text-[9px] print:text-[10px]"}`}
+                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
                                                 >
                                                   📍 {sala?.nome || "S/S"}
                                                 </div>
@@ -548,8 +631,8 @@ export default function HomePage() {
       <footer className="max-w-7xl mx-auto p-8 text-center print:hidden border-t border-gray-100 mt-12">
         <div className="flex flex-col items-center gap-4">
           <div className="text-gray-400 text-xs leading-relaxed max-w-md">
-            Para gerar um PDF, selecione o filtro desejado e utilize a função de
-            impressão do navegador.
+            Para gerar um PDF, selecione o filtro desejado e clique no botão de
+            Exportação acima.
           </div>
           <Link
             href={logado ? "/painel" : "/login"}

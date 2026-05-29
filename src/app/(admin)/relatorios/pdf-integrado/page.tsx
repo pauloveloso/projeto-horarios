@@ -1,13 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas-pro";
 
 export default function ExportarPDFIntegradoPage() {
   const [carregando, setCarregando] = useState(true);
+  const [gerandoPDF, setGerandoPDF] = useState(false);
   const [versoes, setVersoes] = useState<any[]>([]);
   const [versaoSelecionada, setVersaoSelecionada] = useState("");
   const [dados, setDados] = useState<any>(null);
+
+  const relatorioRef = useRef<HTMLDivElement>(null);
 
   const dias = [
     { id: "SEGUNDA", label: "Segunda" },
@@ -17,7 +22,6 @@ export default function ExportarPDFIntegradoPage() {
     { id: "SEXTA", label: "Sexta" },
   ];
 
-  // Horários restritos: 4 aulas de manhã e 4 aulas de tarde
   const horasPermitidas = [
     "07:30",
     "08:20",
@@ -127,9 +131,9 @@ export default function ExportarPDFIntegradoPage() {
 
   useEffect(() => {
     carregarRelatorio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [versaoSelecionada]);
 
-  // ALTERADO: De getAula para getAulasNoSlot (retorna array)
   const getAulasNoSlot = (turmaId: string, diaId: string, slotId: string) => {
     return (
       dados?.aulas?.filter(
@@ -141,29 +145,112 @@ export default function ExportarPDFIntegradoPage() {
     );
   };
 
+  const gerarPDF = async () => {
+    if (!relatorioRef.current) return;
+    setGerandoPDF(true);
+
+    try {
+      const elementosTurma =
+        relatorioRef.current.querySelectorAll(".pdf-bloco-turma");
+
+      // OTIMIZAÇÃO 1: Ativar a compressão de documento do jsPDF
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const usableHeight = pdfHeight - margin * 2;
+
+      let currentY = margin;
+      let isFirstPage = true;
+
+      for (let i = 0; i < elementosTurma.length; i++) {
+        const elemento = elementosTurma[i] as HTMLElement;
+
+        // OTIMIZAÇÃO 2: Reduzir escala de 2 para 1.5 (mantém boa resolução e alivia memória)
+        const canvas = await html2canvas(elemento, {
+          scale: 1.5,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
+
+        // OTIMIZAÇÃO 3: Usar JPEG comprimido (qualidade 75%) ao invés de PNG
+        const imgData = canvas.toDataURL("image/jpeg", 0.75);
+
+        const imgWidth = pdfWidth - margin * 2;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+        if (currentY + imgHeight <= usableHeight + margin) {
+          if (!isFirstPage && currentY === margin) {
+            // Primeira imagem da nova página
+          }
+        } else {
+          if (!isFirstPage) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        }
+
+        // OTIMIZAÇÃO 4: Inserir imagem como JPEG utilizando algoritmo 'FAST'
+        pdf.addImage(
+          imgData,
+          "JPEG",
+          margin,
+          currentY,
+          imgWidth,
+          imgHeight,
+          undefined,
+          "FAST",
+        );
+
+        currentY += imgHeight + 5;
+        isFirstPage = false;
+      }
+
+      pdf.save(`Horarios_Integrado_IFNMG.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Ocorreu um erro ao gerar o PDF. Tente novamente.");
+    } finally {
+      setGerandoPDF(false);
+    }
+  };
+
   if (carregando && !dados)
     return (
-      <div className="p-10 text-center font-bold">
-        Gerando Relatório Técnico Integrado...
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-gray-500 font-bold text-lg animate-pulse">
+            Gerando Relatório Técnico Integrado...
+          </p>
+        </div>
       </div>
     );
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
+    <div className="space-y-6 pb-20">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-xl font-black text-green-800">
             Relatório Integrado (Oficial)
           </h1>
           <p className="text-xs text-gray-500 font-bold uppercase mt-1">
-            Filtro: Modalidade "INTEGRADO" • Correção de Quebra de Texto
+            Exportação em Alta Resolução (PDF Dinâmico)
           </p>
         </div>
         <div className="flex flex-wrap gap-4 w-full md:w-auto">
           <select
             value={versaoSelecionada}
             onChange={(e) => setVersaoSelecionada(e.target.value)}
-            className="border border-green-300 rounded p-2 text-sm font-bold bg-green-50 text-green-800 outline-none"
+            disabled={gerandoPDF}
+            className="border border-green-300 rounded p-2 text-sm font-bold bg-green-50 text-green-800 outline-none disabled:opacity-50"
           >
             {versoes.map((v) => (
               <option key={v.id} value={v.id}>
@@ -172,43 +259,49 @@ export default function ExportarPDFIntegradoPage() {
             ))}
           </select>
           <button
-            onClick={() => window.print()}
-            className="bg-green-600 text-white px-6 py-2 rounded font-black text-sm shadow hover:bg-green-700"
+            onClick={gerarPDF}
+            disabled={gerandoPDF || !dados || dados.grupos.length === 0}
+            className="bg-green-600 text-white px-6 py-2 rounded font-black text-sm shadow hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[160px] transition-all"
           >
-            IMPRIMIR PDF 📄
+            {gerandoPDF ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Processando...
+              </span>
+            ) : (
+              "📄 BAIXAR PDF"
+            )}
           </button>
         </div>
       </div>
 
-      <div className="print:block space-y-6 print:space-y-4">
-        {dados?.grupos.map((grupo: any) => (
-          <div key={grupo.id} className="print:mt-4">
-            <div className="text-center mb-2 border-b-[1.5px] border-black pb-1">
-              <h2 className="text-[10px] font-black uppercase tracking-tight">
-                IFNMG - Campus Januária | Quadro de Horário: {grupo.nomeGrupo}
-              </h2>
-            </div>
-
-            <div className="space-y-4 print:space-y-2">
+      <div className="bg-white p-2 rounded shadow-sm border border-gray-100 overflow-x-auto overflow-y-hidden">
+        <div ref={relatorioRef} className="w-full min-w-[900px] bg-white p-4">
+          {dados?.grupos.map((grupo: any) => (
+            <div key={grupo.id} className="mb-4">
               {grupo.turmas.map((turma: any) => (
-                <div
-                  key={turma.id}
-                  className="relative print:break-inside-avoid print:mb-2 mb-6"
-                >
-                  <div className="text-[9px] font-black uppercase mb-0.5 ml-1">
+                <div key={turma.id} className="pdf-bloco-turma mb-6 bg-white">
+                  <div className="text-center mb-2 border-b-[1.5px] border-black pb-1">
+                    <h2 className="text-[11px] font-black uppercase tracking-tight text-black">
+                      IFNMG - Campus Januária | Quadro de Horário:{" "}
+                      {grupo.nomeGrupo}
+                    </h2>
+                  </div>
+
+                  <div className="text-[12px] font-black uppercase mb-1 text-center text-black tracking-wide">
                     TURMA: {turma.codigo}
                   </div>
 
-                  <table className="w-full border-collapse border-[1.2px] border-black table-fixed text-[8px]">
+                  <table className="w-full border-collapse border-[1.2px] border-black table-fixed text-[9px] text-black bg-white">
                     <thead>
                       <tr className="bg-gray-100 font-black">
-                        <th className="border border-black p-0.5 w-[12%] text-[9px]">
+                        <th className="border border-black p-1 w-[12%] text-[10px] text-black">
                           Horários
                         </th>
                         {dias.map((d) => (
                           <th
                             key={d.id}
-                            className="border border-black p-0.5 w-[17.6%] text-[9px]"
+                            className="border border-black p-1 w-[17.6%] text-[10px] text-black"
                           >
                             {d.label}
                           </th>
@@ -217,7 +310,6 @@ export default function ExportarPDFIntegradoPage() {
                     </thead>
                     <tbody>
                       {dados.slots.map((slot: any) => {
-                        // Verifica se existe alguma divisão na linha inteira
                         const linhaTemChoque = dias.some(
                           (dia) =>
                             getAulasNoSlot(turma.id, dia.id, slot.id).length >
@@ -225,11 +317,8 @@ export default function ExportarPDFIntegradoPage() {
                         );
 
                         return (
-                          <tr
-                            key={slot.id}
-                            className="h-auto print:break-inside-avoid"
-                          >
-                            <td className="border border-black p-0.5 text-center font-bold bg-gray-50 align-middle">
+                          <tr key={slot.id} className="h-auto">
+                            <td className="border border-black p-1 text-center font-bold bg-gray-50 align-middle text-black">
                               {slot.hora_inicio.substring(0, 5)}
                               <br />
                               {slot.hora_fim.substring(0, 5)}
@@ -245,7 +334,7 @@ export default function ExportarPDFIntegradoPage() {
                                 return (
                                   <td
                                     key={dia.id}
-                                    className="border border-black p-0.5"
+                                    className="border border-black p-1"
                                   ></td>
                                 );
                               }
@@ -257,8 +346,7 @@ export default function ExportarPDFIntegradoPage() {
                               return (
                                 <td
                                   key={dia.id}
-                                  /* SE FOR SOLTEIRA NA LINHA ALTA, CENTRALIZA VERTICALMENTE E DÁ DESTAQUE CINZA */
-                                  className={`border border-black p-1 break-words ${isSingleInTallRow ? "align-middle bg-gray-100/70" : "align-top"}`}
+                                  className={`border border-black p-1.5 break-words bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
                                 >
                                   <div className="flex flex-col w-full gap-1">
                                     {aulasNoSlot.map(
@@ -282,22 +370,22 @@ export default function ExportarPDFIntegradoPage() {
                                         return (
                                           <div
                                             key={aula.id}
-                                            className={`flex flex-col ${isSplit && index > 0 ? "border-t border-dashed border-gray-400 pt-1 mt-0.5" : ""}`}
+                                            className={`flex flex-col ${isSplit && index > 0 ? "border-t border-dashed border-gray-400 pt-1.5 mt-1" : ""}`}
                                           >
                                             <div
-                                              className="font-black uppercase leading-[1.1] mb-0.5"
+                                              className="font-black uppercase leading-[1.15] mb-0.5 text-[9px] text-black"
                                               title={disc?.nome}
                                             >
                                               {disc?.nome}
                                             </div>
                                             <div
-                                              className="text-gray-800 leading-[1.1] mb-0.5"
+                                              className="text-gray-800 leading-[1.15] mb-0.5 text-[8.5px] font-semibold"
                                               title={prof?.nome}
                                             >
                                               {prof?.nome}
                                             </div>
                                             <div
-                                              className="italic text-gray-500 text-[7px] leading-[1.1]"
+                                              className="italic text-gray-600 text-[8px] leading-[1.1]"
                                               title={sala?.nome}
                                             >
                                               {sala?.nome || "S/S"}
@@ -318,56 +406,9 @@ export default function ExportarPDFIntegradoPage() {
                 </div>
               ))}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-
-      <style jsx global>{`
-        @media print {
-          @page {
-            size: landscape;
-            margin: 0.5cm;
-          }
-          html,
-          body,
-          #__next,
-          main,
-          .flex-1,
-          .h-screen,
-          .overflow-hidden,
-          .overflow-y-auto {
-            height: auto !important;
-            min-height: auto !important;
-            overflow: visible !important;
-            position: static !important;
-            display: block !important;
-          }
-          body {
-            background: white !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-          .print\\:break-inside-avoid {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            display: block !important;
-          }
-          table {
-            border-collapse: collapse !important;
-            width: 100% !important;
-            table-layout: fixed !important;
-          }
-          td,
-          th {
-            border: 1px solid black !important;
-            word-wrap: break-word !important;
-            white-space: normal !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
