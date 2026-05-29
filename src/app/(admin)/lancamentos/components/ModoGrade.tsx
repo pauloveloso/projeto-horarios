@@ -21,6 +21,11 @@ export default function ModoGrade({
   const [aulaCopiada, setAulaCopiada] = useState<any>(null);
   const [aulaArrastada, setAulaArrastada] = useState<any>(null);
 
+  // ESTADOS DO MODAL DE LIMPEZA
+  const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false);
+  const [textoConfirmacao, setTextoConfirmacao] = useState("");
+  const [limpando, setLimpando] = useState(false);
+
   const diasDaSemana = [
     { id: "SEGUNDA", label: "Segunda" },
     { id: "TERCA", label: "Terça" },
@@ -215,6 +220,38 @@ export default function ModoGrade({
     else alert("Erro ao excluir: " + error.message);
   };
 
+  // FUNÇÃO PARA LIMPAR TODAS AS AULAS DA TURMA SELECIONADA
+  const limparTurma = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const turmaAlvo = turmas.find(
+      (t: any) => String(t.id) === String(filtroTurma),
+    );
+    if (!turmaAlvo) return;
+
+    const textoEsperado = `LIMPAR ${turmaAlvo.codigo}`;
+
+    if (textoConfirmacao !== textoEsperado) {
+      alert(`Frase incorreta. Digite exatamente: ${textoEsperado}`);
+      return;
+    }
+
+    setLimpando(true);
+    const { error } = await supabase
+      .from("aulas")
+      .delete()
+      .eq("versao_id", versaoId)
+      .eq("turma_id", filtroTurma);
+
+    if (error) {
+      alert("Erro ao limpar a turma: " + error.message);
+    } else {
+      setModalLimpezaAberto(false);
+      setTextoConfirmacao("");
+      recarregarAulas();
+    }
+    setLimpando(false);
+  };
+
   const turmaAtualObj = turmas.find(
     (t: any) => String(t.id) === String(filtroTurma),
   );
@@ -272,11 +309,23 @@ export default function ModoGrade({
         </div>
 
         <div className="ml-auto flex flex-col md:flex-row items-center gap-2">
-          <label className="text-xs text-gray-500 font-bold uppercase">
+          {filtroTurma && (
+            <button
+              onClick={() => {
+                setTextoConfirmacao("");
+                setModalLimpezaAberto(true);
+              }}
+              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white rounded outline-none w-full md:w-auto text-xs font-black shadow-sm transition-colors uppercase tracking-wider mr-2"
+            >
+              🗑️ Limpar Turma
+            </button>
+          )}
+
+          <label className="text-xs text-gray-500 font-bold uppercase hidden md:block">
             Visualizando Turma:
           </label>
           <select
-            className="px-4 py-2 bg-white border border-green-500 text-green-700 rounded outline-none w-full md:w-64 text-base font-bold shadow-sm"
+            className="px-4 py-2 bg-white border border-green-500 text-green-700 rounded outline-none w-full md:w-64 text-base font-bold shadow-sm cursor-pointer"
             value={filtroTurma}
             onChange={(e) => {
               setFiltroTurma(e.target.value);
@@ -289,8 +338,6 @@ export default function ModoGrade({
         </div>
       </div>
 
-      {/* MENSAGEM FLUTUANTE DE CÓPIA (Substituindo o banner estático) */}
-      {/* MENSAGEM FLUTUANTE DE CÓPIA (Larga e Estreita) */}
       {aulaCopiada && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] w-[95%] max-w-4xl animate-bounce-short">
           <div className="bg-blue-600 text-white px-6 py-2.5 rounded-xl shadow-2xl flex justify-between items-center border border-blue-400 backdrop-blur-sm bg-opacity-95">
@@ -319,11 +366,9 @@ export default function ModoGrade({
         </div>
       )}
 
-      {/* AJUSTE: Container com scroll interno para permitir o cabeçalho fixo */}
       <div className="overflow-x-auto overflow-y-auto w-full max-h-[calc(100vh-280px)]">
         <table className="w-full text-left border-collapse table-fixed select-none">
           <thead>
-            {/* AJUSTE: Sticky header com z-index alto para ficar por cima das aulas */}
             <tr className="bg-green-700 text-white text-sm uppercase tracking-wider sticky top-0 z-20">
               <th className="p-3 border-r border-green-600 w-32 text-center bg-green-700">
                 Horário
@@ -375,7 +420,6 @@ export default function ModoGrade({
                       >
                         <div className="flex flex-col h-full w-full gap-1">
                           {aulasNoSlot.map((aula: any) => {
-                            // CORREÇÃO: Filtrando a variável problemas para não incluir carga horária
                             const problemas = choques.filter(
                               (c: any) =>
                                 c.id_aula_foco === aula.id &&
@@ -383,7 +427,6 @@ export default function ModoGrade({
                                 c.tipo_choque !== "EXCESSO_CARGA",
                             );
 
-                            // AJUSTE: Removido alertas de carga horária
                             const temCritico = problemas.some((c: any) =>
                               [
                                 "CHOQUE_TURMA",
@@ -514,7 +557,6 @@ export default function ModoGrade({
                             );
                           })}
 
-                          {/* AJUSTE: Opção de cancelar cópia diretamente no slot vazio */}
                           {isCelVazia && !desabilitado && !aulaArrastada && (
                             <div
                               className={`h-full w-full flex items-center justify-center opacity-0 hover:opacity-100 font-light transition-all ${aulaCopiada ? "text-blue-500 text-3xl" : "text-green-600 text-4xl"}`}
@@ -713,6 +755,81 @@ export default function ModoGrade({
                     Salvar
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE LIMPEZA (MODO GRADE) */}
+      {modalLimpezaAberto && turmaAtualObj && (
+        <div className="fixed inset-0 bg-red-900/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border-4 border-red-600">
+            <form onSubmit={limparTurma}>
+              <div className="bg-red-600 text-white px-6 py-4 flex items-center gap-3">
+                <span className="text-3xl">⚠️</span>
+                <div>
+                  <h3 className="font-black text-xl leading-tight">
+                    ATENÇÃO: EXCLUSÃO EM MASSA
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-gray-700 font-medium">
+                  Você está prestes a excluir{" "}
+                  <strong className="text-red-600">TODAS AS AULAS</strong>{" "}
+                  cadastradas na turma <strong>{turmaAtualObj.codigo}</strong>{" "}
+                  nesta versão da grade.
+                </p>
+                <p className="text-sm text-gray-500">
+                  Esta ação é irreversível e o quadro de horários ficará
+                  totalmente vazio.
+                </p>
+
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-black text-gray-700 mb-2">
+                    Para confirmar, digite exatamente a frase abaixo:
+                  </label>
+                  <div className="bg-gray-100 p-3 rounded text-center select-none mb-3 border border-dashed border-gray-300">
+                    <span className="font-mono font-black text-lg text-red-600 tracking-wider">
+                      LIMPAR {turmaAtualObj.codigo}
+                    </span>
+                  </div>
+                  <input
+                    required
+                    type="text"
+                    value={textoConfirmacao}
+                    onChange={(e) => setTextoConfirmacao(e.target.value)}
+                    placeholder={`LIMPAR ${turmaAtualObj.codigo}`}
+                    className="w-full border-2 border-red-200 focus:border-red-600 rounded-lg p-3 text-center text-lg font-mono font-bold outline-none text-red-600"
+                    autoComplete="off"
+                    autoCorrect="off"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalLimpezaAberto(false);
+                    setTextoConfirmacao("");
+                  }}
+                  className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded font-bold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    textoConfirmacao !== `LIMPAR ${turmaAtualObj.codigo}` ||
+                    limpando
+                  }
+                  className="bg-red-600 text-white px-6 py-2 rounded font-black shadow hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {limpando ? "Apagando..." : "Sim, Esvaziar Turma"}
+                </button>
               </div>
             </form>
           </div>

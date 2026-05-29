@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 import ModoPlanilha from "./components/ModoPlanilha";
@@ -10,11 +10,10 @@ export default function LancamentosPage() {
   const [modoAtivo, setModoAtivo] = useState<"PLANILHA" | "GRADE">("PLANILHA");
   const [carregando, setCarregando] = useState(true);
 
-  // NOVO ESTADO: Guarda a versão de rascunho ativa
+  const versaoRascunhoRef = useRef<any>(null);
   const [versaoRascunho, setVersaoRascunho] = useState<any>(null);
 
   const [aulas, setAulas] = useState<any[]>([]);
-  // ==== NOVO ESTADO DA VIEW DE CHOQUES ====
   const [choques, setChoques] = useState<any[]>([]);
 
   const [turmas, setTurmas] = useState<any[]>([]);
@@ -24,40 +23,74 @@ export default function LancamentosPage() {
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
 
-  // ==== NOVA FUNÇÃO: Busca instantânea dos problemas apontados pela View ====
+  const atualizarRascunho = (val: any) => {
+    versaoRascunhoRef.current = val;
+    setVersaoRascunho(val);
+  };
+
+  // Função centralizada para buscar os problemas (Agora filtrando apenas a versão ativa)
   const buscarChoques = async () => {
-    const { data } = await supabase.from("vw_choques_horarios").select("*");
-    if (data) {
-      // Filtramos a regra 8 (Carga Horária) para não ir para a grade (vai para o Dashboard depois)
-      const choquesSemCargaHoraria = data.filter(
-        (c) => c.tipo_choque !== "CARGA_HORARIA",
+    const rascunhoId = versaoRascunhoRef.current?.id;
+    if (!rascunhoId) return;
+
+    console.time("⏱️ Gargalo 2: Tempo da View de Choques");
+
+    // O SEGREDO: Pedimos ao banco para calcular conflitos APENAS deste rascunho
+    const { data, error } = await supabase
+      .from("vw_choques_horarios")
+      .select("*")
+      .eq("versao_id", rascunhoId); // <--- FILTRO CIRÚRGICO AQUI
+
+    if (error) {
+      console.error(
+        "🚨 Erro na View de Choques (verifique se ela possui a coluna versao_id):",
+        error.message,
       );
-      setChoques(choquesSemCargaHoraria);
+    }
+
+    if (data) {
+      setChoques(data.filter((c) => c.tipo_choque !== "CARGA_HORARIA"));
+    }
+    console.timeEnd("⏱️ Gargalo 2: Tempo da View de Choques");
+  };
+
+  const buscarAulas = async (cargaInicial = false) => {
+    if (!versaoRascunhoRef.current) return;
+
+    if (cargaInicial) {
+      console.time("⏱️ Gargalo 1: Busca de Aulas (Carga Inicial)");
+      const requisicaoAulas = supabase
+        .from("aulas")
+        .select("*")
+        .eq("versao_id", versaoRascunhoRef.current.id)
+        .limit(5000)
+        .then(({ data }) => {
+          if (data) setAulas(data);
+          console.timeEnd("⏱️ Gargalo 1: Busca de Aulas (Carga Inicial)");
+        });
+
+      const requisicaoChoques = buscarChoques();
+      await Promise.all([requisicaoAulas, requisicaoChoques]);
+    } else {
+      console.log("🟢 buscarAulas(false) foi acionado pelo componente filho!");
+      console.time("⏱️ Gargalo 3: Tempo Recarga de Fundo (Apenas Choques)");
+      buscarChoques().finally(() => {
+        console.timeEnd(
+          "⏱️ Gargalo 3: Tempo Recarga de Fundo (Apenas Choques)",
+        );
+      });
     }
   };
 
-  // ATUALIZADO: Só busca as aulas do rascunho atual com o limite correto
-  const buscarAulas = async () => {
-    if (!versaoRascunho) return;
-    const { data } = await supabase
-      .from("aulas")
-      .select("*")
-      .eq("versao_id", versaoRascunho.id)
-      .limit(5000);
-    if (data) setAulas(data);
-
-    // Atualiza os choques sempre que as aulas forem recarregadas manualmente
-    buscarChoques();
-  };
-
+  // ========================================================================
+  // EFEITO 1: INICIALIZAÇÃO
+  // ========================================================================
   useEffect(() => {
     let montado = true;
-    let rascunhoAtualId = ""; // Variável auxiliar para o WebSocket não se perder no closure
 
-    const buscarDadosMestres = async () => {
+    const inicializarDadosMestres = async () => {
       setCarregando(true);
       try {
-        // 1. PRIMEIRO: Descobre qual é o rascunho atual
         const { data: dVersoes } = await supabase
           .from("versoes_grade")
           .select("*")
@@ -66,19 +99,6 @@ export default function LancamentosPage() {
 
         const rascunho = dVersoes && dVersoes.length > 0 ? dVersoes[0] : null;
 
-        if (montado) setVersaoRascunho(rascunho);
-        if (rascunho) rascunhoAtualId = rascunho.id;
-
-        // 2. Prepara a query de aulas dinamicamente com o limite de 5000
-        const queryAulas = rascunho
-          ? supabase
-              .from("aulas")
-              .select("*")
-              .eq("versao_id", rascunho.id)
-              .limit(5000)
-          : null;
-
-        // 3. Busca todos os dados mestres simultaneamente (INCLUINDO A VIEW DE CHOQUES)
         const [
           { data: dTurmas },
           { data: dCursos },
@@ -86,8 +106,6 @@ export default function LancamentosPage() {
           { data: dDisciplinas },
           { data: dEspacos },
           { data: dSlots },
-          respostaAulas,
-          { data: dChoques }, // Busca inicial da view
         ] = await Promise.all([
           supabase.from("turmas").select("*").order("codigo").limit(2000),
           supabase.from("cursos").select("*"),
@@ -95,8 +113,6 @@ export default function LancamentosPage() {
           supabase.from("disciplinas").select("*").order("nome").limit(5000),
           supabase.from("espacos").select("*").order("nome").limit(1000),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
-          queryAulas ? queryAulas : Promise.resolve({ data: [] }),
-          supabase.from("vw_choques_horarios").select("*"),
         ]);
 
         if (!montado) return;
@@ -107,103 +123,123 @@ export default function LancamentosPage() {
         if (dDisciplinas) setDisciplinas(dDisciplinas);
         if (dEspacos) setEspacos(dEspacos);
         if (dSlots) setSlots(dSlots);
-        if (respostaAulas && respostaAulas.data) setAulas(respostaAulas.data);
-        if (dChoques)
-          setChoques(dChoques.filter((c) => c.tipo_choque !== "CARGA_HORARIA"));
+
+        if (rascunho) {
+          atualizarRascunho(rascunho);
+        } else {
+          setCarregando(false);
+        }
       } catch (error) {
-        console.error("Erro ao montar o sistema:", error);
-      } finally {
+        console.error("Erro na inicialização:", error);
         if (montado) setCarregando(false);
       }
     };
 
-    buscarDadosMestres();
+    inicializarDadosMestres();
 
-    // ========================================================================
-    // CANAL ÚNICO DE SINCRONIZAÇÃO (Com Proteção contra Duplicidade e de Versão)
-    // ========================================================================
-    const canalSincronizacao = supabase
-      .channel("painel_lancamentos_ifnmg")
-
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "aulas" },
-        (payload) => {
-          setAulas((listaAntiga) => {
-            // PROTEÇÃO DE RASCUNHO: Ignora qualquer aula que não pertença a este rascunho
-            if (
-              payload.eventType === "INSERT" ||
-              payload.eventType === "UPDATE"
-            ) {
-              if (String(payload.new.versao_id) !== String(rascunhoAtualId)) {
-                return listaAntiga;
-              }
-            }
-
-            // ==== MÁGICA EM TEMPO REAL ====
-            // Se a tabela de aulas mudou, a View também mudou.
-            // Mandamos o Next buscar a lista de choques atualizada.
-            buscarChoques();
-
-            if (payload.eventType === "UPDATE") {
-              return listaAntiga.map((a) =>
-                String(a.id) === String(payload.new.id) ? payload.new : a,
-              );
-            }
-            if (payload.eventType === "INSERT") {
-              const jaExiste = listaAntiga.some(
-                (a) => String(a.id) === String(payload.new.id),
-              );
-              if (jaExiste) return listaAntiga;
-
-              return [...listaAntiga, payload.new];
-            }
-            if (payload.eventType === "DELETE") {
-              return listaAntiga.filter(
-                (a) => String(a.id) !== String(payload.old.id),
-              );
-            }
-            return listaAntiga;
-          });
-        },
-      )
-
+    const canalProfessores = supabase
+      .channel("lancamentos_professores")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "professores" },
-        (payload) => {
-          setProfessores((listaAntiga) => {
-            if (payload.eventType === "UPDATE") {
-              return listaAntiga.map((p) =>
-                String(p.id) === String(payload.new.id) ? payload.new : p,
-              );
-            }
-            if (payload.eventType === "INSERT") {
-              const jaExiste = listaAntiga.some(
-                (p) => String(p.id) === String(payload.new.id),
-              );
-              if (jaExiste) return listaAntiga;
-
-              return [...listaAntiga, payload.new];
-            }
-            if (payload.eventType === "DELETE") {
-              return listaAntiga.filter(
-                (p) => String(p.id) !== String(payload.old.id),
-              );
-            }
-            return listaAntiga;
-          });
+        () => {
+          supabase
+            .from("professores")
+            .select("*")
+            .order("nome")
+            .limit(1000)
+            .then(({ data }) => {
+              if (data && montado) setProfessores(data);
+            });
         },
       )
-
       .subscribe();
 
     return () => {
       montado = false;
-      supabase.removeChannel(canalSincronizacao);
+      supabase.removeChannel(canalProfessores);
+    };
+  }, []);
+
+  // ========================================================================
+  // EFEITO 2: ATUALIZAÇÃO OTIMISTA (Velocidade Extrema RAM + WebSocket)
+  // ========================================================================
+  useEffect(() => {
+    if (!versaoRascunho) return;
+
+    let montado = true;
+    let timeoutDebounce: ReturnType<typeof setTimeout>;
+
+    buscarAulas(true).finally(() => {
+      if (montado) setCarregando(false);
+    });
+
+    const idAba = Math.random().toString(36).substring(7);
+    const canalAulas = supabase
+      .channel(`aulas_${idAba}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "aulas" },
+        (payload) => {
+          if (!montado) return;
+
+          console.log(`🔔 WebSocket Chegou: [${payload.eventType}]`);
+          console.time("⏱️ Gargalo 4: Processar Memória RAM");
+
+          const rascunhoId = versaoRascunhoRef.current?.id;
+
+          setAulas((prevAulas) => {
+            let novasAulas = [...prevAulas];
+
+            if (payload.eventType === "INSERT") {
+              if (String(payload.new.versao_id) === String(rascunhoId)) {
+                const jaExiste = novasAulas.some(
+                  (a) => String(a.id) === String(payload.new.id),
+                );
+                if (!jaExiste) novasAulas.push(payload.new);
+              }
+            } else if (payload.eventType === "DELETE") {
+              novasAulas = novasAulas.filter(
+                (a) => String(a.id) !== String(payload.old.id),
+              );
+            } else if (payload.eventType === "UPDATE") {
+              if (String(payload.new.versao_id) === String(rascunhoId)) {
+                const index = novasAulas.findIndex(
+                  (a) => String(a.id) === String(payload.new.id),
+                );
+                if (index !== -1) novasAulas[index] = payload.new;
+                else novasAulas.push(payload.new);
+              } else {
+                novasAulas = novasAulas.filter(
+                  (a) => String(a.id) !== String(payload.new.id),
+                );
+              }
+            }
+            return novasAulas;
+          });
+
+          console.timeEnd("⏱️ Gargalo 4: Processar Memória RAM");
+
+          clearTimeout(timeoutDebounce);
+          timeoutDebounce = setTimeout(() => {
+            if (montado) {
+              console.log(
+                "🔔 Disparando recálculo de choques após debounce do WebSocket...",
+              );
+              buscarChoques();
+            }
+          }, 300);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      montado = false;
+      clearTimeout(timeoutDebounce);
+      supabase.removeChannel(canalAulas);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [versaoRascunho]);
 
   if (carregando) {
     return (
@@ -220,7 +256,6 @@ export default function LancamentosPage() {
 
   return (
     <div className="space-y-6">
-      {/* CABEÇALHO INTACTO */}
       <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
         <div>
           <h1 className="text-2xl font-black text-green-800">
@@ -231,7 +266,6 @@ export default function LancamentosPage() {
           </p>
         </div>
 
-        {/* Indicador de Rascunho Discreto */}
         {versaoRascunho && (
           <div className="hidden md:flex flex-col items-center justify-center px-4">
             <span className="text-[10px] font-black uppercase text-gray-400">
@@ -267,7 +301,6 @@ export default function LancamentosPage() {
         </div>
       </div>
 
-      {/* ÁREA DE CONTEÚDO */}
       {!versaoRascunho ? (
         <div className="bg-white border border-gray-200 p-12 rounded-xl text-center shadow-sm flex flex-col items-center justify-center">
           <span className="text-6xl mb-4 opacity-50">📁</span>
@@ -285,14 +318,14 @@ export default function LancamentosPage() {
             <ModoPlanilha
               versaoId={versaoRascunho.id}
               aulas={aulas}
-              choques={choques} // <-- ENVIANDO PARA A PLANILHA
+              choques={choques}
               turmas={turmas}
               cursos={cursos}
               professores={professores}
               disciplinas={disciplinas}
               espacos={espacos}
               slots={slots}
-              recarregarAulas={buscarAulas}
+              recarregarAulas={() => buscarAulas(false)}
             />
           )}
 
@@ -300,14 +333,14 @@ export default function LancamentosPage() {
             <ModoGrade
               versaoId={versaoRascunho.id}
               aulas={aulas}
-              choques={choques} // <-- ENVIANDO PARA A GRADE
+              choques={choques}
               turmas={turmas}
               cursos={cursos}
               professores={professores}
               disciplinas={disciplinas}
               espacos={espacos}
               slots={slots}
-              recarregarAulas={buscarAulas}
+              recarregarAulas={() => buscarAulas(false)}
             />
           )}
         </>

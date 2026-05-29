@@ -15,7 +15,6 @@ export default function ModoPlanilha({
   slots,
   recarregarAulas,
 }: any) {
-  // AJUSTE: Inicia como true e com 3 linhas vazias para o spinner ficar visível no mount
   const [isProcessando, setIsProcessando] = useState(true);
   const [linhas, setLinhas] = useState<any[]>([
     { id: "1" },
@@ -23,6 +22,11 @@ export default function ModoPlanilha({
     { id: "3" },
   ]);
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("");
+
+  // ESTADOS DO MODAL DE LIMPEZA GERAL
+  const [modalLimpezaAberto, setModalLimpezaAberto] = useState(false);
+  const [textoConfirmacao, setTextoConfirmacao] = useState("");
+  const [limpando, setLimpando] = useState(false);
 
   const formatarHora = (hora: string) => {
     if (!hora) return "";
@@ -284,8 +288,54 @@ export default function ModoPlanilha({
     if (!error) recarregarAulas();
   };
 
+  // FUNÇÃO PARA LIMPAR TODAS AS AULAS DA CATEGORIA SELECIONADA
+  const limparCategoria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const textoEsperado = `LIMPAR ${categoriaFiltro}`;
+
+    if (textoConfirmacao !== textoEsperado) {
+      alert(`Frase incorreta. Digite exatamente: ${textoEsperado}`);
+      return;
+    }
+
+    setLimpando(true);
+
+    // 1. Encontra todos os cursos da categoria atual
+    const cursosDaCategoria = cursos.filter(
+      (c: any) => getCategoriaCurso(c) === categoriaFiltro,
+    );
+    const idsCursos = cursosDaCategoria.map((c: any) => String(c.id));
+
+    // 2. Encontra todas as turmas que pertencem a esses cursos
+    const turmasDaCategoria = turmas.filter((t: any) =>
+      idsCursos.includes(String(t.curso_id)),
+    );
+    const idsTurmas = turmasDaCategoria.map((t: any) => String(t.id));
+
+    // 3. Deleta apenas as aulas dessas turmas nesta versão de grade
+    if (idsTurmas.length > 0) {
+      const { error } = await supabase
+        .from("aulas")
+        .delete()
+        .eq("versao_id", versaoId)
+        .in("turma_id", idsTurmas);
+
+      if (error) {
+        alert("Erro ao limpar a categoria: " + error.message);
+      } else {
+        setModalLimpezaAberto(false);
+        setTextoConfirmacao("");
+        recarregarAulas();
+      }
+    } else {
+      alert("Não há turmas cadastradas para esta categoria.");
+    }
+
+    setLimpando(false);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap gap-2">
         {categoriasDisponiveis.map((cat) => (
           <button
@@ -313,16 +363,31 @@ export default function ModoPlanilha({
               : `${linhas.length} linha(s) exibida(s)`}
           </p>
         </div>
-        <button
-          onClick={adicionarLinha}
-          className="bg-green-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2 w-full md:w-auto justify-center"
-        >
-          <span className="text-lg leading-none">+</span> Adicionar Linha Vazia
-        </button>
+
+        <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+          {categoriaFiltro && (
+            <button
+              onClick={() => {
+                setTextoConfirmacao("");
+                setModalLimpezaAberto(true);
+              }}
+              className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white rounded shadow-sm text-xs font-black transition-colors uppercase tracking-wider flex items-center justify-center gap-2"
+            >
+              <span>🗑️</span> Esvaziar {categoriaFiltro}
+            </button>
+          )}
+
+          <button
+            onClick={adicionarLinha}
+            className="bg-green-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2 justify-center"
+          >
+            <span className="text-lg leading-none">+</span> Adicionar Linha
+            Vazia
+          </button>
+        </div>
       </div>
 
       <div className="w-full overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] relative">
-        {/* INDICADOR DE CARREGAMENTO LOCAL */}
         {isProcessando && (
           <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-50 flex items-center justify-center">
             <div className="flex flex-col items-center gap-2 bg-white p-4 rounded-xl shadow-lg border">
@@ -600,6 +665,83 @@ export default function ModoPlanilha({
           </tbody>
         </table>
       </div>
+
+      {/* MODAL DE CONFIRMAÇÃO DE LIMPEZA GERAL (MODO PLANILHA) */}
+      {modalLimpezaAberto && (
+        <div className="fixed inset-0 bg-red-900/80 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border-4 border-red-600">
+            <form onSubmit={limparCategoria}>
+              <div className="bg-red-600 text-white px-6 py-4 flex items-center gap-3">
+                <span className="text-3xl">⚠️</span>
+                <div>
+                  <h3 className="font-black text-xl leading-tight">
+                    PERIGO: LIMPEZA EM MASSA
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-gray-700 font-medium">
+                  Você está prestes a excluir{" "}
+                  <strong className="text-red-600">TODAS AS AULAS</strong> de{" "}
+                  <strong className="text-red-600">TODAS AS TURMAS</strong> que
+                  pertencem ao grupo <strong>{categoriaFiltro}</strong> nesta
+                  versão da grade.
+                </p>
+                <p className="text-sm text-gray-500 bg-red-50 p-2 rounded border border-red-100">
+                  Isso afetará múltiplos cursos ao mesmo tempo. A ação não pode
+                  ser desfeita.
+                </p>
+
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="block text-sm font-black text-gray-700 mb-2">
+                    Para confirmar a exclusão, digite exatamente:
+                  </label>
+                  <div className="bg-gray-100 p-3 rounded text-center select-none mb-3 border border-dashed border-gray-300">
+                    <span className="font-mono font-black text-lg text-red-600 tracking-wider">
+                      LIMPAR {categoriaFiltro}
+                    </span>
+                  </div>
+                  <input
+                    required
+                    type="text"
+                    value={textoConfirmacao}
+                    onChange={(e) =>
+                      setTextoConfirmacao(e.target.value.toUpperCase())
+                    }
+                    placeholder={`LIMPAR ${categoriaFiltro}`}
+                    className="w-full border-2 border-red-200 focus:border-red-600 rounded-lg p-3 text-center text-lg font-mono font-bold outline-none text-red-600"
+                    autoComplete="off"
+                    autoCorrect="off"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalLimpezaAberto(false);
+                    setTextoConfirmacao("");
+                  }}
+                  className="px-5 py-2 text-gray-600 hover:bg-gray-200 rounded font-bold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={
+                    textoConfirmacao !== `LIMPAR ${categoriaFiltro}` || limpando
+                  }
+                  className="bg-red-600 text-white px-6 py-2 rounded font-black shadow hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {limpando ? "Apagando..." : "Sim, Destruir Tudo"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
