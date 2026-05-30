@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas-pro";
 
 export default function VisualizarHorariosAdminPage() {
   const [carregando, setCarregando] = useState(true);
+  const [gerandoPDF, setGerandoPDF] = useState(false);
 
   const [versoes, setVersoes] = useState<any[]>([]);
   const [versaoSelecionada, setVersaoSelecionada] = useState<string>("");
@@ -26,12 +28,14 @@ export default function VisualizarHorariosAdminPage() {
   >("TURMA");
   const [idSelecionado, setIdSelecionado] = useState<string>("");
 
+  const relatorioRef = useRef<HTMLDivElement>(null);
+
   const diasSemana = [
-    { id: "SEGUNDA", nome: "Segunda" },
-    { id: "TERCA", nome: "Terça" },
-    { id: "QUARTA", nome: "Quarta" },
-    { id: "QUINTA", nome: "Quinta" },
-    { id: "SEXTA", nome: "Sexta" },
+    { id: "SEGUNDA", nome: "SEGUNDA" },
+    { id: "TERCA", nome: "TERÇA" },
+    { id: "QUARTA", nome: "QUARTA" },
+    { id: "QUINTA", nome: "QUINTA" },
+    { id: "SEXTA", nome: "SEXTA" },
   ];
 
   // 1. CARREGA AS VERSÕES E SELECIONA O RASCUNHO POR PADRÃO
@@ -116,15 +120,12 @@ export default function VisualizarHorariosAdminPage() {
       versaoSelecionada,
     );
 
-    // Usa um nome de canal fixo por versão para evitar duplicidade no Hot Reload
     const canal = supabase
       .channel(`realtime-aulas-${versaoSelecionada}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "aulas" },
         (payload) => {
-          console.log("🔔 EVENTO REALTIME CHEGOU DO BANCO:", payload);
-
           if (!montado) return;
 
           setDados((prev: any) => {
@@ -162,9 +163,7 @@ export default function VisualizarHorariosAdminPage() {
           });
         },
       )
-      .subscribe((status) => {
-        console.log("📡 Status do WebSocket:", status);
-      });
+      .subscribe();
 
     return () => {
       montado = false;
@@ -184,11 +183,11 @@ export default function VisualizarHorariosAdminPage() {
   const obterTituloGrade = () => {
     if (!idSelecionado) return "";
     if (tipoFiltro === "TURMA")
-      return `Turma: ${dados.turmas.find((t: any) => t.id === idSelecionado)?.codigo}`;
+      return `TURMA: ${dados.turmas.find((t: any) => t.id === idSelecionado)?.codigo}`;
     if (tipoFiltro === "PROFESSOR")
-      return `Professor(a): ${dados.professores.find((p: any) => p.id === idSelecionado)?.nome}`;
+      return `PROFESSOR(A): ${dados.professores.find((p: any) => p.id === idSelecionado)?.nome}`;
     if (tipoFiltro === "ESPACO")
-      return `Espaço: ${dados.espacos.find((e: any) => e.id === idSelecionado)?.nome}`;
+      return `ESPAÇO: ${dados.espacos.find((e: any) => e.id === idSelecionado)?.nome}`;
     return "";
   };
 
@@ -223,17 +222,17 @@ export default function VisualizarHorariosAdminPage() {
 
   const todosTurnos = [
     {
-      nome: "Manhã",
+      nome: "MANHÃ",
       slots: dados.slots.filter((s: any) => s.hora_inicio < "12:00"),
     },
     {
-      nome: "Tarde",
+      nome: "TARDE",
       slots: dados.slots.filter(
         (s: any) => s.hora_inicio >= "12:00" && s.hora_inicio < "18:00",
       ),
     },
     {
-      nome: "Noite",
+      nome: "NOITE",
       slots: dados.slots.filter((s: any) => s.hora_inicio >= "18:00"),
     },
   ];
@@ -251,6 +250,73 @@ export default function VisualizarHorariosAdminPage() {
         }),
       };
     });
+
+  // ========================================================================
+  // MOTOR DE EXPORTAÇÃO PDF - PÁGINA ÚNICA E COMPACTO
+  // ========================================================================
+  const gerarPDF = async () => {
+    if (!relatorioRef.current) return;
+    setGerandoPDF(true);
+
+    try {
+      const elemento = relatorioRef.current;
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      const margin = 10;
+      const maxPdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const maxPdfHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+
+      const canvas = await html2canvas(elemento, {
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/jpeg", 0.75);
+
+      const imgRatio = canvas.height / canvas.width;
+      let imgWidth = maxPdfWidth;
+      let imgHeight = imgWidth * imgRatio;
+
+      if (imgHeight > maxPdfHeight) {
+        imgHeight = maxPdfHeight;
+        imgWidth = imgHeight / imgRatio;
+      }
+
+      const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
+      const yOffset = margin;
+
+      pdf.addImage(
+        imgData,
+        "JPEG",
+        xOffset,
+        yOffset,
+        imgWidth,
+        imgHeight,
+        undefined,
+        "FAST",
+      );
+
+      const tituloSeguro =
+        obterTituloGrade()
+          .replace(/[^a-zA-Z0-9]/g, "_")
+          .replace(/_+/g, "_")
+          .toLowerCase() || "horarios";
+      pdf.save(`IFNMG_${tituloSeguro}_Inspeção.pdf`);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Ocorreu um erro ao exportar o PDF. Tente novamente.");
+    } finally {
+      setGerandoPDF(false);
+    }
+  };
 
   if (carregando && !versaoSelecionada) {
     return (
@@ -357,11 +423,20 @@ export default function VisualizarHorariosAdminPage() {
           </select>
 
           <button
-            onClick={() => window.print()}
-            disabled={!idSelecionado || turnosOcupados.length === 0}
-            className="bg-white text-green-800 px-4 py-2 rounded-lg font-black text-xs shadow hover:bg-green-50 disabled:opacity-30 h-9"
+            onClick={gerarPDF}
+            disabled={
+              !idSelecionado || turnosOcupados.length === 0 || gerandoPDF
+            }
+            className="bg-white text-green-800 px-4 py-2 rounded-lg font-black text-xs shadow hover:bg-green-50 disabled:opacity-30 h-9 flex items-center justify-center min-w-[130px]"
           >
-            🖨️ IMPRIMIR
+            {gerandoPDF ? (
+              <span className="flex items-center gap-2">
+                <div className="w-3 h-3 border-2 border-green-800 border-t-transparent rounded-full animate-spin"></div>
+                GERANDO...
+              </span>
+            ) : (
+              "🖨️ IMPRIMIR PDF"
+            )}
           </button>
         </div>
       </div>
@@ -382,144 +457,178 @@ export default function VisualizarHorariosAdminPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="text-center pb-2 border-b border-gray-100">
-              <h2 className="text-2xl font-black text-gray-800 uppercase">
-                {obterTituloGrade()}
+          <div ref={relatorioRef} className="bg-white p-4">
+            <div className="text-center py-4 bg-white border-b border-gray-400 mb-4">
+              <h2 className="text-2xl font-black text-black uppercase tracking-wide">
+                IFNMG - Campus Januária | Quadro de Horário
               </h2>
+              <h3 className="text-xl font-bold text-black uppercase mt-1">
+                {obterTituloGrade()}
+              </h3>
               {infoVersao && (
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
-                  Versão em Exibição: {infoVersao.nome} ({infoVersao.status}) •
-                  Vigência: {formatarData(infoVersao.data_inicio_vigencia)}
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mt-1">
+                  Vigência: A partir de{" "}
+                  {formatarData(infoVersao.data_inicio_vigencia)}
+                  {infoVersao.status === "RASCUNHO" && (
+                    <span className="text-red-600 ml-2">
+                      (NÃO OFICIAL - RASCUNHO)
+                    </span>
+                  )}
                 </p>
               )}
             </div>
 
             {turnosOcupados.length === 0 ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center text-gray-500">
-                <span className="text-4xl block mb-2">📭</span>
-                <p className="text-base font-bold text-gray-700">
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 text-center text-gray-500 my-8">
+                <span className="text-5xl block mb-4">📭</span>
+                <p className="text-lg font-bold text-gray-700">
                   Nenhum horário cadastrado
                 </p>
-                <p className="text-xs mt-1">
-                  Não foram encontradas aulas registradas para esta seleção
-                  nesta versão da grade.
+                <p className="text-sm mt-1">
+                  Não foram encontradas aulas para esta seleção na versão atual
+                  da grade.
                 </p>
               </div>
             ) : (
-              turnosOcupados.map((turno, tIdx) => (
-                <div
-                  key={turno.nome}
-                  className="overflow-hidden bg-white border border-gray-200 rounded-lg"
-                >
-                  <div className="bg-gray-50 p-2 text-center border-b border-gray-200">
-                    <h3 className="text-xs font-black uppercase text-gray-500 tracking-widest">
-                      {turno.nome}
-                    </h3>
-                  </div>
-                  <table className="w-full border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-gray-50/50 border-b border-gray-200 text-[10px] font-black uppercase text-gray-400">
-                        <th className="p-2 w-24 border-r border-gray-200 text-center">
-                          Horário
-                        </th>
-                        {diasSemana.map((dia) => (
-                          <th
-                            key={dia.id}
-                            className="p-2 border-r border-gray-200 text-center"
-                          >
-                            {dia.nome}
+              <div className="space-y-6">
+                {turnosOcupados.map((turno, tIdx) => (
+                  <div
+                    key={`turno-${turno.nome}-${tIdx}`}
+                    className="bg-white box-border"
+                  >
+                    <div className="text-center mb-1 border-b border-gray-400 pb-1">
+                      <h3 className="font-black text-sm tracking-wide text-black uppercase mt-0.5">
+                        TURNO: {turno.nome}
+                      </h3>
+                    </div>
+
+                    <table className="w-full border-collapse border border-black table-fixed text-black bg-white">
+                      <thead>
+                        <tr className="bg-gray-200 font-bold h-5">
+                          <th className="border border-black py-0 px-1 w-[8%] text-[10px] text-center leading-none uppercase">
+                            HORÁRIO
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {turno.slots.map((slot: any) => {
-                        const linhaTemChoque = diasSemana.some(
-                          (dia) => getAulasPublico(dia.id, slot.id).length > 1,
-                        );
-                        return (
-                          <tr
-                            key={slot.id}
-                            className={linhaTemChoque ? "h-24" : "h-16"}
-                          >
-                            <td className="p-1 border-r border-gray-200 text-center bg-gray-50/30 align-middle">
-                              <div className="font-black text-gray-700 text-xs">
+                          {diasSemana.map((dia) => (
+                            <th
+                              key={`th-${dia.id}`}
+                              className="border border-black py-0 px-1 w-[18.4%] text-[10px] text-center leading-none uppercase"
+                            >
+                              {dia.nome}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {turno.slots.map((slot: any) => {
+                          const linhaTemChoque = diasSemana.some(
+                            (dia) =>
+                              getAulasPublico(dia.id, slot.id).length > 1,
+                          );
+
+                          return (
+                            <tr key={`slot-${slot.id}`} className="h-auto">
+                              <td className="border border-black p-0.5 text-center font-bold bg-gray-100 align-middle text-black text-[10px] leading-tight">
                                 {formatarHora(slot.hora_inicio)}
-                              </div>
-                              <div className="text-[9px] text-gray-400">
+                                <br />
                                 {formatarHora(slot.hora_fim)}
-                              </div>
-                            </td>
-                            {diasSemana.map((dia) => {
-                              const aulasNoSlot = getAulasPublico(
-                                dia.id,
-                                slot.id,
-                              );
-                              if (aulasNoSlot.length === 0)
+                              </td>
+
+                              {diasSemana.map((dia) => {
+                                const aulasNoSlot = getAulasPublico(
+                                  dia.id,
+                                  slot.id,
+                                );
+
+                                if (aulasNoSlot.length === 0) {
+                                  return (
+                                    <td
+                                      key={`td-${dia.id}-vazio`}
+                                      className="border border-black p-0.5 bg-white"
+                                    ></td>
+                                  );
+                                }
+
+                                const isSplit = aulasNoSlot.length > 1;
+                                const isSingleInTallRow =
+                                  linhaTemChoque && !isSplit;
+
                                 return (
                                   <td
-                                    key={dia.id}
-                                    className="border-r border-gray-100"
-                                  ></td>
+                                    key={`td-${dia.id}`}
+                                    className={`border border-black p-0.5 bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
+                                  >
+                                    <div className="flex flex-col w-full h-full justify-center items-center text-center gap-0.5">
+                                      {aulasNoSlot.map(
+                                        (aula: any, aIdx: number) => {
+                                          const disc = dados.disciplinas.find(
+                                            (d: any) =>
+                                              d.id === aula.disciplina_id,
+                                          );
+                                          const prof = dados.professores.find(
+                                            (p: any) =>
+                                              p.id === aula.professor_id,
+                                          );
+                                          const sala = dados.espacos.find(
+                                            (e: any) => e.id === aula.espaco_id,
+                                          );
+                                          const turma = dados.turmas.find(
+                                            (t: any) => t.id === aula.turma_id,
+                                          );
+
+                                          return (
+                                            <div
+                                              key={`aula-${aula.id}-${aIdx}`}
+                                              className={`flex flex-col justify-center items-center w-full ${isSplit && aIdx > 0 ? "border-t border-dashed border-gray-400 pt-0.5 mt-0.5" : ""}`}
+                                            >
+                                              <span
+                                                className="font-bold text-[11px] leading-[1.1] uppercase text-black"
+                                                title={disc?.nome}
+                                              >
+                                                {disc?.nome}
+                                              </span>
+
+                                              {tipoFiltro !== "TURMA" && (
+                                                <span
+                                                  className="text-[10px] text-gray-800 font-medium leading-[1.1] uppercase"
+                                                  title={turma?.codigo}
+                                                >
+                                                  {turma?.codigo}
+                                                </span>
+                                              )}
+
+                                              {tipoFiltro !== "PROFESSOR" && (
+                                                <span
+                                                  className="text-[10px] text-gray-800 font-medium leading-[1.1] uppercase"
+                                                  title={prof?.nome}
+                                                >
+                                                  {prof?.nome || "A DEFINIR"}
+                                                </span>
+                                              )}
+
+                                              {tipoFiltro !== "ESPACO" && (
+                                                <span
+                                                  className="text-[10px] text-gray-600 leading-[1.1] uppercase"
+                                                  title={sala?.nome}
+                                                >
+                                                  {sala?.nome || "S/S"}
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        },
+                                      )}
+                                    </div>
+                                  </td>
                                 );
-                              const isSplit = aulasNoSlot.length > 1;
-                              return (
-                                <td
-                                  key={dia.id}
-                                  className={`p-1 border-r border-gray-100 ${linhaTemChoque && !isSplit ? "align-middle" : "align-top"}`}
-                                >
-                                  <div className="flex flex-col w-full gap-1 h-full">
-                                    {aulasNoSlot.map((aula: any) => {
-                                      const disc = dados.disciplinas.find(
-                                        (d: any) => d.id === aula.disciplina_id,
-                                      );
-                                      const prof = dados.professores.find(
-                                        (p: any) => p.id === aula.professor_id,
-                                      );
-                                      const sala = dados.espacos.find(
-                                        (e: any) => e.id === aula.espaco_id,
-                                      );
-                                      const turma = dados.turmas.find(
-                                        (t: any) => t.id === aula.turma_id,
-                                      );
-                                      return (
-                                        <div
-                                          key={aula.id}
-                                          className={`w-full rounded p-1 border border-black/5 flex flex-col justify-center min-h-0 bg-gray-50/50`}
-                                        >
-                                          <div className="font-black text-[11px] leading-tight text-gray-900 uppercase truncate">
-                                            {disc?.nome}
-                                          </div>
-                                          <div className="flex flex-col text-[9px] text-gray-500 font-bold uppercase truncate">
-                                            {tipoFiltro !== "PROFESSOR" && (
-                                              <div>
-                                                👤 {prof?.nome || "A definir"}
-                                              </div>
-                                            )}
-                                            {tipoFiltro !== "TURMA" && (
-                                              <div>👥 {turma?.codigo}</div>
-                                            )}
-                                            {tipoFiltro !== "ESPACO" && (
-                                              <div>
-                                                📍 {sala?.nome || "S/S"}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

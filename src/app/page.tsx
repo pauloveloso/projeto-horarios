@@ -30,15 +30,14 @@ export default function HomePage() {
   >("TURMA");
   const [idSelecionado, setIdSelecionado] = useState<string>("");
 
-  // Referência para o motor de PDF "fotografar" a área correta
   const relatorioRef = useRef<HTMLDivElement>(null);
 
   const diasSemana = [
-    { id: "SEGUNDA", nome: "Segunda" },
-    { id: "TERCA", nome: "Terça" },
-    { id: "QUARTA", nome: "Quarta" },
-    { id: "QUINTA", nome: "Quinta" },
-    { id: "SEXTA", nome: "Sexta" },
+    { id: "SEGUNDA", nome: "SEGUNDA" },
+    { id: "TERCA", nome: "TERÇA" },
+    { id: "QUARTA", nome: "QUARTA" },
+    { id: "QUINTA", nome: "QUINTA" },
+    { id: "SEXTA", nome: "SEXTA" },
   ];
 
   useEffect(() => {
@@ -55,6 +54,7 @@ export default function HomePage() {
         .order("data_inicio_vigencia", { ascending: false });
 
       if (data && data.length > 0) {
+        // SEGURANÇA MÁXIMA: Se não estiver logado, extirpa rascunhos da lista
         const versoesFiltradas = isLogado
           ? data
           : data.filter((v) => v.status !== "RASCUNHO");
@@ -132,11 +132,11 @@ export default function HomePage() {
   const obterTituloGrade = () => {
     if (!idSelecionado) return "";
     if (tipoFiltro === "TURMA")
-      return `Turma: ${dados.turmas.find((t: any) => t.id === idSelecionado)?.codigo}`;
+      return `TURMA: ${dados.turmas.find((t: any) => t.id === idSelecionado)?.codigo}`;
     if (tipoFiltro === "PROFESSOR")
-      return `Professor(a): ${dados.professores.find((p: any) => p.id === idSelecionado)?.nome}`;
+      return `PROFESSOR(A): ${dados.professores.find((p: any) => p.id === idSelecionado)?.nome}`;
     if (tipoFiltro === "ESPACO")
-      return `Espaço: ${dados.espacos.find((e: any) => e.id === idSelecionado)?.nome}`;
+      return `ESPAÇO: ${dados.espacos.find((e: any) => e.id === idSelecionado)?.nome}`;
     return "";
   };
 
@@ -171,17 +171,17 @@ export default function HomePage() {
 
   const todosTurnos = [
     {
-      nome: "Manhã",
+      nome: "MANHÃ",
       slots: dados.slots.filter((s: any) => s.hora_inicio < "12:00"),
     },
     {
-      nome: "Tarde",
+      nome: "TARDE",
       slots: dados.slots.filter(
         (s: any) => s.hora_inicio >= "12:00" && s.hora_inicio < "18:00",
       ),
     },
     {
-      nome: "Noite",
+      nome: "NOITE",
       slots: dados.slots.filter((s: any) => s.hora_inicio >= "18:00"),
     },
   ];
@@ -200,9 +200,6 @@ export default function HomePage() {
       };
     });
 
-  // ========================================================================
-  // MOTOR DE EXPORTAÇÃO PDF - PÁGINA ÚNICA E COMPACTO
-  // ========================================================================
   const gerarPDF = async () => {
     if (!relatorioRef.current) return;
     setGerandoPDF(true);
@@ -217,38 +214,31 @@ export default function HomePage() {
         compress: true,
       });
 
-      // Dimensões úteis da página (A4 Paisagem: 297x210)
       const margin = 10;
       const maxPdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
       const maxPdfHeight = pdf.internal.pageSize.getHeight() - margin * 2;
 
-      // Tira 1 fotografia inteira de toda a área referenciada
       const canvas = await html2canvas(elemento, {
-        scale: 1.5, // Resolução ótima vs Tamanho de arquivo
+        scale: 1.5,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
       });
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.75); // Compressão leve
+      const imgData = canvas.toDataURL("image/jpeg", 0.75);
 
-      // Calcula as proporções
       const imgRatio = canvas.height / canvas.width;
       let imgWidth = maxPdfWidth;
       let imgHeight = imgWidth * imgRatio;
 
-      // MÁGICA DO "FIT TO PAGE": Se a foto for mais alta que a página,
-      // nós reduzimos o tamanho dela proporcionalmente para forçar a caber!
       if (imgHeight > maxPdfHeight) {
         imgHeight = maxPdfHeight;
         imgWidth = imgHeight / imgRatio;
       }
 
-      // Centraliza a imagem vertical e horizontalmente caso sobre espaço
       const xOffset = margin + (maxPdfWidth - imgWidth) / 2;
       const yOffset = margin;
 
-      // Desenha na única página gerada
       pdf.addImage(
         imgData,
         "JPEG",
@@ -452,20 +442,18 @@ export default function HomePage() {
             </p>
           </div>
         ) : (
-          <div ref={relatorioRef} className="space-y-6 bg-white p-4">
-            <div className="text-center py-4 bg-white">
-              <h2 className="text-3xl font-black text-gray-800 uppercase">
-                {obterTituloGrade()}
+          <div ref={relatorioRef} className="bg-white p-4">
+            <div className="text-center py-4 bg-white border-b border-gray-400 mb-4">
+              <h2 className="text-2xl font-black text-black uppercase tracking-wide">
+                IFNMG - Campus Januária | Quadro de Horário
               </h2>
+              <h3 className="text-xl font-bold text-black uppercase mt-1">
+                {obterTituloGrade()}
+              </h3>
               {infoVersao && (
-                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mt-1">
+                <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mt-1">
                   Vigência: A partir de{" "}
                   {formatarData(infoVersao.data_inicio_vigencia)}
-                  {infoVersao.status === "RASCUNHO" && (
-                    <span className="text-yellow-600 ml-2">
-                      (Modo Rascunho)
-                    </span>
-                  )}
                 </p>
               )}
             </div>
@@ -482,147 +470,145 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              turnosOcupados.map((turno, tIdx) => (
-                <div
-                  key={`turno-${turno.nome}-${tIdx}`}
-                  className="overflow-hidden bg-white border border-gray-200 rounded-lg"
-                >
-                  <div className="bg-gray-100 p-2 text-center border-b border-gray-200">
-                    <h3 className="text-sm font-black uppercase text-gray-600 tracking-widest">
-                      {turno.nome}
-                    </h3>
-                  </div>
-                  <table className="w-full border-collapse table-fixed">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200 text-[10px] font-black uppercase text-gray-500">
-                        <th className="p-2 w-24 border-r border-gray-200 text-center">
-                          Horário
-                        </th>
-                        {diasSemana.map((dia) => (
-                          <th
-                            key={`th-${dia.id}`}
-                            className="p-2 border-r border-gray-200 text-center"
-                          >
-                            {dia.nome}
+              <div className="space-y-6">
+                {turnosOcupados.map((turno, tIdx) => (
+                  <div
+                    key={`turno-${turno.nome}-${tIdx}`}
+                    className="bg-white box-border"
+                  >
+                    <div className="text-center mb-1 border-b border-gray-400 pb-1">
+                      <h3 className="font-black text-sm tracking-wide text-black uppercase mt-0.5">
+                        TURNO: {turno.nome}
+                      </h3>
+                    </div>
+
+                    <table className="w-full border-collapse border border-black table-fixed text-black bg-white">
+                      <thead>
+                        <tr className="bg-gray-200 font-bold h-5">
+                          <th className="border border-black py-0 px-1 w-[8%] text-[10px] text-center leading-none uppercase">
+                            HORÁRIO
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {turno.slots.map((slot: any, sIdx: number) => {
-                        const linhaTemChoque = diasSemana.some(
-                          (dia) => getAulasPublico(dia.id, slot.id).length > 1,
-                        );
+                          {diasSemana.map((dia) => (
+                            <th
+                              key={`th-${dia.id}`}
+                              className="border border-black py-0 px-1 w-[18.4%] text-[10px] text-center leading-none uppercase"
+                            >
+                              {dia.nome}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {turno.slots.map((slot: any) => {
+                          const linhaTemChoque = diasSemana.some(
+                            (dia) =>
+                              getAulasPublico(dia.id, slot.id).length > 1,
+                          );
 
-                        return (
-                          <tr
-                            key={`slot-${slot.id || sIdx}`}
-                            className={`${linhaTemChoque ? "h-24" : "h-16"}`}
-                          >
-                            <td className="p-1 border-r border-gray-200 text-center bg-gray-50/50 align-middle">
-                              <div className="font-black text-gray-700 text-sm">
+                          return (
+                            <tr key={`slot-${slot.id}`} className="h-auto">
+                              <td className="border border-black p-0.5 text-center font-bold bg-gray-100 align-middle text-black text-[10px] leading-tight">
                                 {formatarHora(slot.hora_inicio)}
-                              </div>
-                              <div className="text-[10px] text-gray-400">
+                                <br />
                                 {formatarHora(slot.hora_fim)}
-                              </div>
-                            </td>
+                              </td>
 
-                            {diasSemana.map((dia) => {
-                              const aulasNoSlot = getAulasPublico(
-                                dia.id,
-                                slot.id,
-                              );
+                              {diasSemana.map((dia) => {
+                                const aulasNoSlot = getAulasPublico(
+                                  dia.id,
+                                  slot.id,
+                                );
 
-                              if (aulasNoSlot.length === 0) {
+                                if (aulasNoSlot.length === 0) {
+                                  return (
+                                    <td
+                                      key={`td-${dia.id}-vazio`}
+                                      className="border border-black p-0.5 bg-white"
+                                    ></td>
+                                  );
+                                }
+
+                                const isSplit = aulasNoSlot.length > 1;
+                                const isSingleInTallRow =
+                                  linhaTemChoque && !isSplit;
+
                                 return (
                                   <td
-                                    key={`td-${dia.id}-vazio`}
-                                    className="border-r border-gray-100"
-                                  ></td>
-                                );
-                              }
-
-                              const isSplit = aulasNoSlot.length > 1;
-                              const isSingleInTallRow =
-                                linhaTemChoque && !isSplit;
-
-                              return (
-                                <td
-                                  key={`td-${dia.id}`}
-                                  className={`p-1 border-r border-gray-100 bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
-                                >
-                                  <div
-                                    className={`flex flex-col w-full gap-1 ${isSplit ? "h-full" : ""}`}
+                                    key={`td-${dia.id}`}
+                                    className={`border border-black p-0.5 bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
                                   >
-                                    {aulasNoSlot.map(
-                                      (aula: any, aIdx: number) => {
-                                        const disc = dados.disciplinas.find(
-                                          (d: any) =>
-                                            d.id === aula.disciplina_id,
-                                        );
-                                        const prof = dados.professores.find(
-                                          (p: any) =>
-                                            p.id === aula.professor_id,
-                                        );
-                                        const sala = dados.espacos.find(
-                                          (e: any) => e.id === aula.espaco_id,
-                                        );
-                                        const turma = dados.turmas.find(
-                                          (t: any) => t.id === aula.turma_id,
-                                        );
+                                    <div className="flex flex-col w-full h-full justify-center items-center text-center gap-0.5">
+                                      {aulasNoSlot.map(
+                                        (aula: any, aIdx: number) => {
+                                          const disc = dados.disciplinas.find(
+                                            (d: any) =>
+                                              d.id === aula.disciplina_id,
+                                          );
+                                          const prof = dados.professores.find(
+                                            (p: any) =>
+                                              p.id === aula.professor_id,
+                                          );
+                                          const sala = dados.espacos.find(
+                                            (e: any) => e.id === aula.espaco_id,
+                                          );
+                                          const turma = dados.turmas.find(
+                                            (t: any) => t.id === aula.turma_id,
+                                          );
 
-                                        return (
-                                          <div
-                                            key={`aula-${aula.id || aIdx}-${aIdx}`}
-                                            className={`w-full rounded flex flex-col justify-center border border-black/5 min-h-0
-                                                ${isSplit ? "flex-1 p-1 bg-gray-50" : "p-1.5 bg-gray-50"}
-                                                ${isSingleInTallRow ? "px-1.5 py-2" : ""}
-                                              `}
-                                          >
+                                          return (
                                             <div
-                                              className={`font-black leading-tight text-gray-900 mb-0.5 uppercase truncate ${isSplit ? "text-[10px]" : "text-xs"}`}
+                                              key={`aula-${aula.id}-${aIdx}`}
+                                              className={`flex flex-col justify-center items-center w-full ${isSplit && aIdx > 0 ? "border-t border-dashed border-gray-400 pt-0.5 mt-0.5" : ""}`}
                                             >
-                                              {disc?.nome}
-                                            </div>
-                                            <div className="flex flex-col min-w-0">
-                                              {tipoFiltro !== "PROFESSOR" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
-                                                >
-                                                  👤 {prof?.nome || "A definir"}
-                                                </div>
-                                              )}
+                                              <span
+                                                className="font-bold text-[11px] leading-[1.1] uppercase text-black"
+                                                title={disc?.nome}
+                                              >
+                                                {disc?.nome}
+                                              </span>
+
                                               {tipoFiltro !== "TURMA" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
+                                                <span
+                                                  className="text-[10px] text-gray-800 font-medium leading-[1.1] uppercase"
+                                                  title={turma?.codigo}
                                                 >
-                                                  👥 {turma?.codigo}
-                                                </div>
+                                                  {turma?.codigo}
+                                                </span>
                                               )}
-                                              {tipoFiltro !== "ESPACO" && (
-                                                <div
-                                                  className={`font-bold text-gray-700/90 truncate uppercase ${isSplit ? "text-[8px]" : "text-[9px]"}`}
+
+                                              {tipoFiltro !== "PROFESSOR" && (
+                                                <span
+                                                  className="text-[10px] text-gray-800 font-medium leading-[1.1] uppercase"
+                                                  title={prof?.nome}
                                                 >
-                                                  📍 {sala?.nome || "S/S"}
-                                                </div>
+                                                  {prof?.nome || "A DEFINIR"}
+                                                </span>
+                                              )}
+
+                                              {tipoFiltro !== "ESPACO" && (
+                                                <span
+                                                  className="text-[10px] text-gray-600 leading-[1.1] uppercase"
+                                                  title={sala?.nome}
+                                                >
+                                                  {sala?.nome || "S/S"}
+                                                </span>
                                               )}
                                             </div>
-                                          </div>
-                                        );
-                                      },
-                                    )}
-                                  </div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))
+                                          );
+                                        },
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

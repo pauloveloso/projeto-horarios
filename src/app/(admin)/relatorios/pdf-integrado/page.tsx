@@ -15,11 +15,11 @@ export default function ExportarPDFIntegradoPage() {
   const relatorioRef = useRef<HTMLDivElement>(null);
 
   const dias = [
-    { id: "SEGUNDA", label: "Segunda" },
-    { id: "TERCA", label: "Terça" },
-    { id: "QUARTA", label: "Quarta" },
-    { id: "QUINTA", label: "Quinta" },
-    { id: "SEXTA", label: "Sexta" },
+    { id: "SEGUNDA", label: "SEGUNDA" },
+    { id: "TERCA", label: "TERÇA" },
+    { id: "QUARTA", label: "QUARTA" },
+    { id: "QUINTA", label: "QUINTA" },
+    { id: "SEXTA", label: "SEXTA" },
   ];
 
   const horasPermitidas = [
@@ -153,7 +153,6 @@ export default function ExportarPDFIntegradoPage() {
       const elementosTurma =
         relatorioRef.current.querySelectorAll(".pdf-bloco-turma");
 
-      // OTIMIZAÇÃO 1: Ativar a compressão de documento do jsPDF
       const pdf = new jsPDF({
         orientation: "landscape",
         unit: "mm",
@@ -172,7 +171,6 @@ export default function ExportarPDFIntegradoPage() {
       for (let i = 0; i < elementosTurma.length; i++) {
         const elemento = elementosTurma[i] as HTMLElement;
 
-        // OTIMIZAÇÃO 2: Reduzir escala de 2 para 1.5 (mantém boa resolução e alivia memória)
         const canvas = await html2canvas(elemento, {
           scale: 1.5,
           useCORS: true,
@@ -180,7 +178,6 @@ export default function ExportarPDFIntegradoPage() {
           backgroundColor: "#ffffff",
         });
 
-        // OTIMIZAÇÃO 3: Usar JPEG comprimido (qualidade 75%) ao invés de PNG
         const imgData = canvas.toDataURL("image/jpeg", 0.75);
 
         const imgWidth = pdfWidth - margin * 2;
@@ -197,7 +194,6 @@ export default function ExportarPDFIntegradoPage() {
           }
         }
 
-        // OTIMIZAÇÃO 4: Inserir imagem como JPEG utilizando algoritmo 'FAST'
         pdf.addImage(
           imgData,
           "JPEG",
@@ -209,7 +205,8 @@ export default function ExportarPDFIntegradoPage() {
           "FAST",
         );
 
-        currentY += imgHeight + 5;
+        // Espaçamento pequeno entre as tabelas
+        currentY += imgHeight + 4;
         isFirstPage = false;
       }
 
@@ -278,30 +275,33 @@ export default function ExportarPDFIntegradoPage() {
       <div className="bg-white p-2 rounded shadow-sm border border-gray-100 overflow-x-auto overflow-y-hidden">
         <div ref={relatorioRef} className="w-full min-w-[900px] bg-white p-4">
           {dados?.grupos.map((grupo: any) => (
-            <div key={grupo.id} className="mb-4">
+            <div key={grupo.id} className="mb-0">
               {grupo.turmas.map((turma: any) => (
-                <div key={turma.id} className="pdf-bloco-turma mb-6 bg-white">
-                  <div className="text-center mb-2 border-b-[1.5px] border-black pb-1">
-                    <h2 className="text-[11px] font-black uppercase tracking-tight text-black">
+                <div
+                  key={turma.id}
+                  className="pdf-bloco-turma mb-4 bg-white box-border"
+                >
+                  {/* CABEÇALHO COMPACTO NO PADRÃO SUPERIOR */}
+                  <div className="text-center mb-1 flex flex-col gap-0 text-gray-900 border-b border-gray-400 pb-1">
+                    <h2 className="font-bold text-xs uppercase leading-tight text-black">
                       IFNMG - Campus Januária | Quadro de Horário:{" "}
                       {grupo.nomeGrupo}
                     </h2>
+                    <h3 className="font-black text-sm tracking-wide text-black uppercase mt-0.5">
+                      TURMA: {turma.codigo}
+                    </h3>
                   </div>
 
-                  <div className="text-[12px] font-black uppercase mb-1 text-center text-black tracking-wide">
-                    TURMA: {turma.codigo}
-                  </div>
-
-                  <table className="w-full border-collapse border-[1.2px] border-black table-fixed text-[9px] text-black bg-white">
+                  <table className="w-full border-collapse border border-black table-fixed text-black bg-white">
                     <thead>
-                      <tr className="bg-gray-100 font-black">
-                        <th className="border border-black p-1 w-[12%] text-[10px] text-black">
-                          Horários
+                      <tr className="bg-gray-200 font-bold h-5">
+                        <th className="border border-black py-0 px-1 w-[8%] text-[10px] text-center leading-none uppercase">
+                          HORÁRIO
                         </th>
                         {dias.map((d) => (
                           <th
                             key={d.id}
-                            className="border border-black p-1 w-[17.6%] text-[10px] text-black"
+                            className="border border-black py-0 px-1 w-[18.4%] text-[10px] text-center leading-none uppercase"
                           >
                             {d.label}
                           </th>
@@ -318,7 +318,7 @@ export default function ExportarPDFIntegradoPage() {
 
                         return (
                           <tr key={slot.id} className="h-auto">
-                            <td className="border border-black p-1 text-center font-bold bg-gray-50 align-middle text-black">
+                            <td className="border border-black p-0.5 text-center font-bold bg-gray-100 align-middle text-black text-[10px] leading-tight">
                               {slot.hora_inicio.substring(0, 5)}
                               <br />
                               {slot.hora_fim.substring(0, 5)}
@@ -334,7 +334,7 @@ export default function ExportarPDFIntegradoPage() {
                                 return (
                                   <td
                                     key={dia.id}
-                                    className="border border-black p-1"
+                                    className="border border-black p-0.5 bg-white"
                                   ></td>
                                 );
                               }
@@ -346,9 +346,10 @@ export default function ExportarPDFIntegradoPage() {
                               return (
                                 <td
                                   key={dia.id}
-                                  className={`border border-black p-1.5 break-words bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
+                                  className={`border border-black p-0.5 bg-white ${isSingleInTallRow ? "align-middle" : "align-top"}`}
                                 >
-                                  <div className="flex flex-col w-full gap-1">
+                                  {/* CONTEÚDO CENTRALIZADO E COM FONTES LEVEMENTE MAIORES */}
+                                  <div className="flex flex-col w-full h-full justify-center items-center text-center gap-0.5">
                                     {aulasNoSlot.map(
                                       (aula: any, index: number) => {
                                         const disc = dados.disciplinas?.find(
@@ -370,26 +371,26 @@ export default function ExportarPDFIntegradoPage() {
                                         return (
                                           <div
                                             key={aula.id}
-                                            className={`flex flex-col ${isSplit && index > 0 ? "border-t border-dashed border-gray-400 pt-1.5 mt-1" : ""}`}
+                                            className={`flex flex-col justify-center items-center w-full ${isSplit && index > 0 ? "border-t border-dashed border-gray-400 pt-0.5 mt-0.5" : ""}`}
                                           >
-                                            <div
-                                              className="font-black uppercase leading-[1.15] mb-0.5 text-[9px] text-black"
+                                            <span
+                                              className="font-bold text-[11px] leading-[1.1] uppercase text-black"
                                               title={disc?.nome}
                                             >
                                               {disc?.nome}
-                                            </div>
-                                            <div
-                                              className="text-gray-800 leading-[1.15] mb-0.5 text-[8.5px] font-semibold"
+                                            </span>
+                                            <span
+                                              className="text-[10px] text-gray-800 font-medium leading-[1.1] uppercase"
                                               title={prof?.nome}
                                             >
                                               {prof?.nome}
-                                            </div>
-                                            <div
-                                              className="italic text-gray-600 text-[8px] leading-[1.1]"
+                                            </span>
+                                            <span
+                                              className="text-[10px] text-gray-600 leading-[1.1] uppercase"
                                               title={sala?.nome}
                                             >
                                               {sala?.nome || "S/S"}
-                                            </div>
+                                            </span>
                                           </div>
                                         );
                                       },
