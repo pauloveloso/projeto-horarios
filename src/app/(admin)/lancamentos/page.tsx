@@ -22,30 +22,26 @@ export default function LancamentosPage() {
   const [disciplinas, setDisciplinas] = useState<any[]>([]);
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
+  const [categorias, setCategorias] = useState<any[]>([]); // NOVA STATE
 
   const atualizarRascunho = (val: any) => {
     versaoRascunhoRef.current = val;
     setVersaoRascunho(val);
   };
 
-  // Função centralizada para buscar os problemas (Agora filtrando apenas a versão ativa)
   const buscarChoques = async () => {
     const rascunhoId = versaoRascunhoRef.current?.id;
     if (!rascunhoId) return;
 
     console.time("⏱️ Gargalo 2: Tempo da View de Choques");
 
-    // O SEGREDO: Pedimos ao banco para calcular conflitos APENAS deste rascunho
     const { data, error } = await supabase
       .from("vw_choques_horarios")
       .select("*")
-      .eq("versao_id", rascunhoId); // <--- FILTRO CIRÚRGICO AQUI
+      .eq("versao_id", rascunhoId);
 
     if (error) {
-      console.error(
-        "🚨 Erro na View de Choques (verifique se ela possui a coluna versao_id):",
-        error.message,
-      );
+      console.error("🚨 Erro na View de Choques:", error.message);
     }
 
     if (data) {
@@ -106,6 +102,7 @@ export default function LancamentosPage() {
           { data: dDisciplinas },
           { data: dEspacos },
           { data: dSlots },
+          { data: dCategorias }, // FETCH DE CATEGORIAS
         ] = await Promise.all([
           supabase.from("turmas").select("*").order("codigo").limit(2000),
           supabase.from("cursos").select("*"),
@@ -113,6 +110,7 @@ export default function LancamentosPage() {
           supabase.from("disciplinas").select("*").order("nome").limit(5000),
           supabase.from("espacos").select("*").order("nome").limit(1000),
           supabase.from("slots_horarios").select("*").order("hora_inicio"),
+          supabase.from("categorias_espacos").select("*").order("nome"),
         ]);
 
         if (!montado) return;
@@ -123,6 +121,7 @@ export default function LancamentosPage() {
         if (dDisciplinas) setDisciplinas(dDisciplinas);
         if (dEspacos) setEspacos(dEspacos);
         if (dSlots) setSlots(dSlots);
+        if (dCategorias) setCategorias(dCategorias);
 
         if (rascunho) {
           atualizarRascunho(rascunho);
@@ -325,6 +324,7 @@ export default function LancamentosPage() {
               disciplinas={disciplinas}
               espacos={espacos}
               slots={slots}
+              categorias={categorias}
               recarregarAulas={() => buscarAulas(false)}
             />
           )}
@@ -340,6 +340,7 @@ export default function LancamentosPage() {
               disciplinas={disciplinas}
               espacos={espacos}
               slots={slots}
+              categorias={categorias}
               recarregarAulas={() => buscarAulas(false)}
             />
           )}

@@ -241,7 +241,7 @@ export default function FichasMatriculaPage() {
         if (!folhaElement) continue;
 
         const canvas = await html2canvas(folhaElement, {
-          scale: 1.5,
+          scale: 3, // Qualidade altíssima
           useCORS: true,
           logging: false,
           scrollY: 0,
@@ -250,7 +250,7 @@ export default function FichasMatriculaPage() {
           backgroundColor: "#ffffff",
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.75);
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
         if (i > 0) pdf.addPage();
         pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);
@@ -275,188 +275,208 @@ export default function FichasMatriculaPage() {
     return (
       <div
         id={`folha-pdf-${index}`}
-        className="bg-white text-black font-sans relative print-page-container p-8 border border-gray-300 my-4 shadow-md box-border"
+        className="bg-white text-black font-sans relative print-page-container p-8 border border-gray-300 my-4 shadow-md box-border overflow-hidden"
       >
-        <div>
-          {/* CABEÇALHO PADRÃO IFNMG */}
-          <div className="flex items-center justify-center gap-6 mb-3 border-b border-gray-400 pb-2">
-            <img
-              src="/logo-ifnmg.png"
-              alt="Logo IFNMG"
-              className="h-12 w-auto object-contain block"
-            />
-            <div className="text-center">
-              <h1 className="font-black text-xs uppercase leading-tight">
-                Instituto Federal
-              </h1>
-              <h2 className="font-bold text-[11px] uppercase leading-tight">
-                Norte de Minas Gerais
-              </h2>
-              <h3 className="font-bold text-[11px] uppercase leading-tight">
-                Campus Januária
-              </h3>
+        <div className="flex flex-col h-full">
+          <div>
+            {/* CABEÇALHO PADRÃO IFNMG */}
+            <div className="flex items-center justify-center gap-6 mb-3 border-b border-gray-400 pb-2">
+              <img
+                src="/logo-ifnmg.png"
+                alt="Logo IFNMG"
+                className="h-12 w-auto object-contain block"
+              />
+              <div className="text-center">
+                <h1 className="font-black text-xs uppercase leading-tight">
+                  Instituto Federal
+                </h1>
+                <h2 className="font-bold text-[11px] uppercase leading-tight">
+                  Norte de Minas Gerais
+                </h2>
+                <h3 className="font-bold text-[11px] uppercase leading-tight">
+                  Campus Januária
+                </h3>
+              </div>
             </div>
-          </div>
 
-          <div className="text-center mb-3 flex flex-col gap-0.5 text-xs text-gray-900">
-            <h4 className="font-black text-xs uppercase tracking-wide">
-              REQUERIMENTO DE RENOVAÇÃO DE MATRÍCULA
-            </h4>
-            <p className="font-bold uppercase">
-              COORDENAÇÃO DO CURSO DE {pagina.turma.curso_nome}
-            </p>
-            <p className="font-bold uppercase">
-              {formatarSemestreInteligente(
-                versaoAtivaDetalhes?.semestre,
-                pagina.turma.curso_nome,
-              )}
-            </p>
-            <p className="font-black text-xl mt-0.5 tracking-wider text-black">
-              {pagina.turma.codigo}
-            </p>
-          </div>
-
-          {/* TABELA DE HORÁRIOS */}
-          <div className="mb-2">
-            <table className="w-full border-collapse border border-black text-[10px]">
-              <thead>
-                <tr className="bg-gray-200 font-bold">
-                  <th className="border border-black p-1 w-24 text-center text-xs">
-                    HORÁRIO
-                  </th>
-                  {diasSemana.map((dia) => (
-                    <th
-                      key={dia.id}
-                      className="border border-black p-1 uppercase text-center text-xs"
-                    >
-                      {dia.nome}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pagina.slots.map((slot: any, index: number) => {
-                  let intervalo = null;
-                  if (index > 0) {
-                    const fimAnterior = pagina.slots[index - 1].hora_fim;
-                    if (slot.hora_inicio !== fimAnterior) {
-                      intervalo = (
-                        <tr
-                          key={`intervalo-${index}`}
-                          className="bg-gray-100 font-bold"
-                        >
-                          <td
-                            colSpan={6}
-                            className="border border-black p-1 text-center uppercase tracking-widest text-[9px]"
-                          >
-                            INTERVALO: {formatarHora(fimAnterior)} às{" "}
-                            {formatarHora(slot.hora_inicio)}
-                          </td>
-                        </tr>
-                      );
-                    }
-                  }
-
-                  return (
-                    <React.Fragment key={slot.id}>
-                      {intervalo}
-                      <tr>
-                        <td className="border border-black p-1 text-center font-bold align-middle bg-gray-50/30 text-xs">
-                          {formatarHora(slot.hora_inicio)}
-                          <br />
-                          às
-                          <br />
-                          {formatarHora(slot.hora_fim)}
-                        </td>
-                        {diasSemana.map((dia) => {
-                          const aula = pagina.aulas.find(
-                            (a: any) =>
-                              a.dia_semana === dia.id &&
-                              String(a.slot_horario_id) === String(slot.id),
-                          );
-
-                          return (
-                            <td
-                              key={dia.id}
-                              className="border border-black p-1 align-middle text-center w-1/5 bg-white"
-                            >
-                              {aula ? (
-                                <div className="flex flex-col h-full justify-center items-center text-center py-0.5">
-                                  <div className="font-bold uppercase leading-tight text-[10px] mb-0.5">
-                                    (&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;){" "}
-                                    {aula.disciplina_nome}
-                                  </div>
-                                  <div className="text-[9px] uppercase leading-tight text-gray-700">
-                                    {aula.espaco_nome} / {aula.professor_nome}
-                                  </div>
-                                  <div className="font-bold text-[9px] tracking-wide mt-1 pt-0.5 border-t border-gray-100 flex justify-center gap-3 w-full">
-                                    <span>1(&nbsp;&nbsp;)</span>{" "}
-                                    <span>2(&nbsp;&nbsp;)</span>{" "}
-                                    <span>3(&nbsp;&nbsp;)</span>{" "}
-                                    <span>4(&nbsp;&nbsp;)</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="min-h-[3.8rem]"></div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* INSTRUÇÕES E LEGENDA */}
-          <div className="mb-2 text-[10px] text-justify border border-black p-2 leading-tight bg-gray-50">
-            <p className="mb-0.5">
-              A matrícula é responsabilidade do acadêmico. Antes de efetivá-la,
-              leia os Regulamentos dos Cursos Superiores do IFNMG. Após fazer a
-              escolha da disciplina,{" "}
-              <strong>
-                ANULAR os quadros das disciplinas que NÃO serão cursadas
-              </strong>
-              .
-            </p>
-            <p className="mb-0.5">
-              <strong>Em destaque:</strong> disciplinas que são pré-requisitos
-              para disciplinas futuras. Recomenda-se prioridade.
-            </p>
-            <p className="font-bold">
-              Legenda: 1 Regular; 2 Adiantamento; 3 Optativa/Curso; 4 Optativa
-              Extra-curso.
-            </p>
-          </div>
-        </div>
-
-        {/* CONTÊINER DE ASSINATURAS */}
-        <div className="pt-2 text-sm border-t border-gray-300 mt-4 dynamic-footer">
-          <div className="grid grid-cols-2 gap-12 mt-1">
-            <div>
-              <div className="border-b border-black h-5 mb-1"></div>
-              <p className="text-[10px] font-bold uppercase text-center text-gray-600">
-                Assinatura do Acadêmico/Responsável
+            <div className="text-center mb-3 flex flex-col gap-0.5 text-xs text-gray-900">
+              <h4 className="font-black text-xs uppercase tracking-wide">
+                REQUERIMENTO DE RENOVAÇÃO DE MATRÍCULA
+              </h4>
+              <p className="font-bold uppercase">
+                COORDENAÇÃO DO CURSO DE {pagina.turma.curso_nome}
+              </p>
+              <p className="font-bold uppercase">
+                {formatarSemestreInteligente(
+                  versaoAtivaDetalhes?.semestre,
+                  pagina.turma.curso_nome,
+                )}
+              </p>
+              <p className="font-black text-xl mt-0.5 tracking-wider text-black">
+                {pagina.turma.codigo}
               </p>
             </div>
-            <div className="flex gap-6">
-              <div className="flex-1">
-                <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-400 pl-2">
-                  ____ / ____ / ________
-                </div>
-                <p className="text-[10px] font-bold uppercase text-gray-600 pl-2">
-                  Data
+
+            {/* TABELA DE HORÁRIOS COM MARCA D'ÁGUA RESTRITA */}
+            <div className="mb-2 relative overflow-hidden">
+              {/* MARCA D'ÁGUA SOBRE O QUADRO */}
+              <div className="absolute top-1/2 left-1/2 w-[200%] h-[200%] -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-50 opacity-[0.25] transform -rotate-45 flex flex-col justify-center items-center gap-16">
+                {Array.from({ length: 20 }).map((_, rowIndex) => (
+                  <div
+                    key={rowIndex}
+                    className={`flex gap-16 whitespace-nowrap ${rowIndex % 2 === 0 ? "ml-48" : ""}`}
+                  >
+                    {Array.from({ length: 10 }).map((_, colIndex) => (
+                      <div
+                        key={colIndex}
+                        className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest"
+                      >
+                        <img
+                          src="/ifnmg_vertical_cinza 2.png"
+                          alt=""
+                          className="h-4 w-auto"
+                        />
+                        <span className="text-transparent [-webkit-text-stroke:0.5px_black]">
+                          Instituto Federal do Norte de Minas Gerais - Campus
+                          Januária
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* TABELA PROPRIAMENTE DITA */}
+              <table className="w-full border-collapse border border-black text-[10px] bg-white relative z-10">
+                <thead>
+                  <tr className="bg-gray-200 font-bold">
+                    <th className="border border-black p-1 w-24 text-center text-xs">
+                      HORÁRIO
+                    </th>
+                    {diasSemana.map((dia) => (
+                      <th
+                        key={dia.id}
+                        className="border border-black p-1 uppercase text-center text-xs"
+                      >
+                        {dia.nome}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagina.slots.map((slot: any, index: number) => {
+                    let intervalo = null;
+                    if (index > 0) {
+                      const fimAnterior = pagina.slots[index - 1].hora_fim;
+                      if (slot.hora_inicio !== fimAnterior) {
+                        intervalo = (
+                          <tr
+                            key={`intervalo-${index}`}
+                            className="bg-gray-100 font-bold"
+                          >
+                            <td
+                              colSpan={6}
+                              className="border border-black p-1 text-center uppercase tracking-widest text-[9px]"
+                            >
+                              INTERVALO: {formatarHora(fimAnterior)} às{" "}
+                              {formatarHora(slot.hora_inicio)}
+                            </td>
+                          </tr>
+                        );
+                      }
+                    }
+
+                    return (
+                      <React.Fragment key={slot.id}>
+                        {intervalo}
+                        <tr>
+                          <td className="border border-black p-1 text-center font-bold align-middle bg-gray-50 text-xs">
+                            {formatarHora(slot.hora_inicio)}
+                            <br />
+                            às
+                            <br />
+                            {formatarHora(slot.hora_fim)}
+                          </td>
+                          {diasSemana.map((dia) => {
+                            const aula = pagina.aulas.find(
+                              (a: any) =>
+                                a.dia_semana === dia.id &&
+                                String(a.slot_horario_id) === String(slot.id),
+                            );
+
+                            return (
+                              <td
+                                key={dia.id}
+                                className="border border-black p-1 align-middle text-center w-1/5 bg-white"
+                              >
+                                {aula ? (
+                                  <div className="flex flex-col h-full justify-center items-center text-center py-1">
+                                    <div className="font-bold uppercase leading-tight text-xs mb-1">
+                                      (&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;){" "}
+                                      {aula.disciplina_nome}
+                                    </div>
+                                    <div className="text-[10px] uppercase leading-tight text-gray-800">
+                                      {aula.espaco_nome} / {aula.professor_nome}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="min-h-[4.5rem]"></div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* INSTRUÇÕES E LEGENDA */}
+            <div className="mb-2 text-xs text-justify border border-black p-2 leading-tight bg-gray-50">
+              <p className="mb-0.5">
+                A matrícula é responsabilidade do acadêmico. Antes de
+                efetivá-la, leia os Regulamentos dos Cursos Superiores do IFNMG.
+                Após fazer a escolha da disciplina,{" "}
+                <strong>
+                  ANULAR os quadros das disciplinas que NÃO serão cursadas
+                </strong>
+                .
+              </p>
+              <p className="font-bold text-black">
+                Disciplinas que são pré-requisitos para disciplinas futuras.
+                Recomenda-se prioridade.
+              </p>
+            </div>
+          </div>
+
+          {/* CONTÊINER DE ASSINATURAS */}
+          <div className="pt-2 text-sm border-t border-gray-400 mt-4 dynamic-footer">
+            <div className="grid grid-cols-2 gap-12 mt-1">
+              <div>
+                <div className="border-b border-black h-5 mb-1"></div>
+                <p className="text-[10px] font-bold uppercase text-center text-gray-800">
+                  Assinatura do Acadêmico/Responsável
                 </p>
               </div>
-              <div className="flex-1">
-                <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-400 pl-2">
-                  _________________
+              <div className="flex gap-6">
+                <div className="flex-1">
+                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2">
+                    ____ / ____ / ________
+                  </div>
+                  <p className="text-[10px] font-bold uppercase text-gray-800 pl-2">
+                    Data
+                  </p>
                 </div>
-                <p className="text-[10px] font-bold uppercase text-gray-600 pl-2">
-                  Turma
-                </p>
+                <div className="flex-1">
+                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2">
+                    _________________
+                  </div>
+                  <p className="text-[10px] font-bold uppercase text-gray-800 pl-2">
+                    Turma
+                  </p>
+                </div>
               </div>
             </div>
           </div>

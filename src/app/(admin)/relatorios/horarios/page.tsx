@@ -240,8 +240,9 @@ export default function QuadrosHorariosPage() {
         const folhaElement = document.getElementById(`quadro-pdf-${i}`);
         if (!folhaElement) continue;
 
+        // AQUI ESTÁ A CORREÇÃO DE QUALIDADE (scale: 3 e qualidade do imgData)
         const canvas = await html2canvas(folhaElement, {
-          scale: 1.5,
+          scale: 3,
           useCORS: true,
           logging: false,
           scrollY: 0,
@@ -250,7 +251,7 @@ export default function QuadrosHorariosPage() {
           backgroundColor: "#ffffff",
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.75);
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
         if (i > 0) pdf.addPage();
         pdf.addImage(imgData, "JPEG", 0, 0, 297, 210);

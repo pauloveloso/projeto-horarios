@@ -13,6 +13,7 @@ export default function ModoPlanilha({
   disciplinas,
   espacos,
   slots,
+  categorias = [],
   recarregarAulas,
 }: any) {
   const [isProcessando, setIsProcessando] = useState(true);
@@ -580,11 +581,37 @@ export default function ModoPlanilha({
                         className="w-full truncate bg-transparent border-0 border-b border-transparent focus:border-green-500 focus:ring-0 text-[13px] p-1 outline-none"
                       >
                         <option value="">(Nenhum)</option>
-                        {espacos.map((e: any) => (
-                          <option key={e.id} value={e.id}>
-                            {e.nome}
-                          </option>
-                        ))}
+                        {categorias.map((cat: any) => {
+                          const espacosDaCat = espacos.filter(
+                            (e: any) =>
+                              String(e.categoria_id) === String(cat.id),
+                          );
+                          if (espacosDaCat.length === 0) return null;
+                          return (
+                            <optgroup key={cat.id} label={cat.nome}>
+                              {espacosDaCat.map((e: any) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.nome}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                        {(() => {
+                          const semCat = espacos.filter(
+                            (e: any) => !e.categoria_id,
+                          );
+                          if (semCat.length === 0) return null;
+                          return (
+                            <optgroup label="Outros / Sem Categoria">
+                              {semCat.map((e: any) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.nome}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })()}
                       </select>
                     )}
                   </td>

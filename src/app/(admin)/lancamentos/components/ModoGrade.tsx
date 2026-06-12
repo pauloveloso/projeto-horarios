@@ -13,6 +13,7 @@ export default function ModoGrade({
   disciplinas,
   espacos,
   slots,
+  categorias = [],
   recarregarAulas,
 }: any) {
   const [filtroTurma, setFiltroTurma] = useState("");
@@ -729,11 +730,36 @@ export default function ModoGrade({
                       }
                     >
                       <option value="">(A definir)</option>
-                      {espacos.map((s: any) => (
-                        <option key={s.id} value={s.id}>
-                          {s.nome}
-                        </option>
-                      ))}
+                      {categorias.map((cat: any) => {
+                        const espacosDaCat = espacos.filter(
+                          (e: any) => String(e.categoria_id) === String(cat.id),
+                        );
+                        if (espacosDaCat.length === 0) return null;
+                        return (
+                          <optgroup key={cat.id} label={cat.nome}>
+                            {espacosDaCat.map((e: any) => (
+                              <option key={e.id} value={e.id}>
+                                {e.nome}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })}
+                      {(() => {
+                        const semCat = espacos.filter(
+                          (e: any) => !e.categoria_id,
+                        );
+                        if (semCat.length === 0) return null;
+                        return (
+                          <optgroup label="Outros / Sem Categoria">
+                            {semCat.map((e: any) => (
+                              <option key={e.id} value={e.id}>
+                                {e.nome}
+                              </option>
+                            ))}
+                          </optgroup>
+                        );
+                      })()}
                     </select>
                   </div>
                 </div>

@@ -272,14 +272,16 @@ export default function VisualizarHorariosAdminPage() {
       const maxPdfWidth = pdf.internal.pageSize.getWidth() - margin * 2;
       const maxPdfHeight = pdf.internal.pageSize.getHeight() - margin * 2;
 
+      // QUALIDADE AUMENTADA (scale: 3)
       const canvas = await html2canvas(elemento, {
-        scale: 1.5,
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
       });
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.75);
+      // COMPRESSÃO MELHORADA (0.95)
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
       const imgRatio = canvas.height / canvas.width;
       let imgWidth = maxPdfWidth;
