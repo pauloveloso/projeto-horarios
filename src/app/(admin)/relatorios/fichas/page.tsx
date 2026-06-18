@@ -416,7 +416,10 @@ export default function FichasMatriculaPage() {
                                       {aula.disciplina_nome}
                                     </div>
                                     <div className="text-[10px] uppercase leading-tight text-gray-800">
-                                      {aula.espaco_nome} / {aula.professor_nome}
+                                      {aula.espaco_nome}
+                                    </div>
+                                    <div className="text-[10px] uppercase leading-tight text-gray-800">
+                                      {aula.professor_nome}
                                     </div>
                                   </div>
                                 ) : (
@@ -452,7 +455,7 @@ export default function FichasMatriculaPage() {
           </div>
 
           {/* CONTÊINER DE ASSINATURAS */}
-          <div className="pt-2 text-sm border-t border-gray-400 mt-4 dynamic-footer">
+          <div className="pt-2 text-sm mt-4 dynamic-footer">
             <div className="grid grid-cols-2 gap-12 mt-1">
               <div>
                 <div className="border-b border-black h-5 mb-1"></div>
@@ -462,17 +465,13 @@ export default function FichasMatriculaPage() {
               </div>
               <div className="flex gap-6">
                 <div className="flex-1">
-                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2">
-                    ____ / ____ / ________
-                  </div>
+                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2"></div>
                   <p className="text-[10px] font-bold uppercase text-gray-800 pl-2">
                     Data
                   </p>
                 </div>
                 <div className="flex-1">
-                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2">
-                    _________________
-                  </div>
+                  <div className="border-b border-black h-5 mb-1 flex items-end text-[11px] text-gray-500 pl-2"></div>
                   <p className="text-[10px] font-bold uppercase text-gray-800 pl-2">
                     Turma
                   </p>

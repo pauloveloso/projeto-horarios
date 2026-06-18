@@ -1,0 +1,89 @@
+.
+├── AGENTS.md
+├── CLAUDE.md
+├── .env.local
+├── eslint.config.mjs
+├── estrutura_projeto.txt
+├── estrutura.txt
+├── .gitignore
+├── next.config.ts
+├── next-env.d.ts
+├── package.json
+├── package-lock.json
+├── postcss.config.mjs
+├── public
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── ifnmg_vertical_cinza 2.png
+│   ├── logo-ifnmg.jpg
+│   ├── logo-ifnmg.png
+│   ├── logo.png
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── README.md
+├── src
+│   ├── app
+│   │   ├── (admin)
+│   │   │   ├── cadastros
+│   │   │   │   ├── cursos
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── disciplinas
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── espacos
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── periodos
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── professores
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── versoes
+│   │   │   │       └── page.tsx
+│   │   │   ├── lancamentos
+│   │   │   │   ├── components
+│   │   │   │   │   ├── ModoGrade.tsx
+│   │   │   │   │   └── ModoPlanilha.tsx
+│   │   │   │   ├── OLDpage.tsx
+│   │   │   │   └── page.tsx
+│   │   │   ├── layout.tsx
+│   │   │   ├── painel
+│   │   │   │   └── page.tsx
+│   │   │   ├── relatorios
+│   │   │   │   ├── fichas
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── horarios
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── pdf-integrado
+│   │   │   │   │   └── page.tsx
+│   │   │   │   ├── professores
+│   │   │   │   │   └── page.tsx
+│   │   │   │   └── visualizar-horarios
+│   │   │   │       └── page.tsx
+│   │   │   └── reservas
+│   │   │       └── page.tsx
+│   │   ├── api
+│   │   │   ├── test-db
+│   │   │   │   └── route.ts
+│   │   │   └── test-env
+│   │   │       └── route.ts
+│   │   ├── favicon.ico
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── loading.tsx
+│   │   ├── login
+│   │   │   └── page.tsx
+│   │   ├── OLDpage.tsx
+│   │   ├── page copy.tsx
+│   │   ├── page.tsx
+│   │   └── (public)
+│   │       └── page.tsx
+│   ├── lib
+│   │   ├── actions.ts
+│   │   ├── supabase.ts
+│   │   └── validacoes
+│   │       └── engine.ts
+│   └── types
+│       ├── database.ts
+│       └── validacoes.ts
+└── tsconfig.json
+
+30 directories, 57 files
