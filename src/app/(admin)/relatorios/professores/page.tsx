@@ -133,12 +133,14 @@ export default function RelatorioProfessoresPage() {
             onChange={(e) => setFiltro(e.target.value)}
             className="border border-gray-300 rounded p-2 text-sm outline-none focus:ring-2 focus:ring-green-500 w-full sm:w-56"
           />
+          {/* 
           <button
             onClick={() => window.print()}
             className="bg-green-600 text-white px-5 py-2.5 rounded shadow-sm text-sm font-bold hover:bg-green-700 transition-colors shrink-0"
           >
             Imprimir 📄
           </button>
+          */}
         </div>
       </div>
 

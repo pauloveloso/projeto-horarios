@@ -66,7 +66,6 @@ export default function AdminLayout({
       itens: [
         { nome: "Lançamentos", href: "/lancamentos", icone: "🗓️" },
         { nome: "Gestão de Versões", href: "/cadastros/versoes", icone: "🔄" },
-        { nome: "Carga Horária", href: "/relatorios/professores", icone: "📈" },
         {
           nome: "Visualizar Horários",
           href: "/relatorios/visualizar-horarios",

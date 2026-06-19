@@ -319,10 +319,47 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ACESSO RÁPIDO - RELATÓRIOS (NOVA SEÇÃO) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/relatorios/professores"
+          className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-blue-300 hover:shadow-md transition-all flex items-center gap-5 group cursor-pointer"
+        >
+          <div className="w-14 h-14 bg-blue-50 rounded-xl flex items-center justify-center text-3xl group-hover:bg-blue-100 transition-colors shrink-0">
+            👨‍🏫
+          </div>
+          <div>
+            <h3 className="font-black text-gray-800 group-hover:text-blue-700 transition-colors text-lg">
+              Carga Horária Docente
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Acompanhamento completo de distribuição de aulas e horas.
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/relatorios/ocupacao-salas"
+          className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:border-green-300 hover:shadow-md transition-all flex items-center gap-5 group cursor-pointer"
+        >
+          <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center text-3xl group-hover:bg-green-100 transition-colors shrink-0">
+            🏢
+          </div>
+          <div>
+            <h3 className="font-black text-gray-800 group-hover:text-green-700 transition-colors text-lg">
+              Ocupação de Salas
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Consolidado físico de espaços e infraestrutura por categoria.
+            </p>
+          </div>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ALERTAS E ERROS */}
         <div className="lg:col-span-2 space-y-6">
-          {/* BLOCO CRÍTICO - Agora no padrão bg-gray-50 */}
+          {/* BLOCO CRÍTICO - bg-gray-50 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
               <h2 className="font-bold text-gray-700 flex items-center gap-2">
@@ -332,7 +369,7 @@ export default function DashboardPage() {
                 {choquesCriticos.length}
               </span>
             </div>
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100">
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 custom-scrollbar">
               {choquesCriticos.length === 0 ? (
                 <div className="p-10 text-center text-gray-400 font-medium">
                   Nenhum choque de horário detectado.
@@ -355,7 +392,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* BLOCO PEDAGÓGICO - Padrão bg-gray-50 */}
+          {/* BLOCO PEDAGÓGICO - bg-gray-50 */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
               <h2 className="font-bold text-gray-700 flex items-center gap-2">
@@ -366,7 +403,7 @@ export default function DashboardPage() {
                 {alertasSecundarios.length}
               </span>
             </div>
-            <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-100">
+            <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-100 custom-scrollbar">
               {alertasSecundarios.length === 0 ? (
                 <div className="p-6 text-center text-gray-400 text-sm italic">
                   Nenhum alerta pedagógico.
@@ -387,7 +424,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* MINI TERMÔMETRO (TOP 5) - Padrão bg-gray-50 */}
+        {/* MINI TERMÔMETRO (TOP 5) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
             <div>
@@ -435,14 +472,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="p-4 bg-gray-50 border-t border-gray-100">
-            <Link
-              href="/relatorios/professores"
-              className="block w-full text-center bg-white border border-gray-200 text-green-700 py-2 rounded shadow-sm text-xs font-bold hover:bg-green-50 transition-all"
-            >
-              VER RELATÓRIO COMPLETO →
-            </Link>
-          </div>
+          {/* Removi o link duplicado daqui pois agora ele é um dos botões principais acima */}
         </div>
       </div>
     </div>
