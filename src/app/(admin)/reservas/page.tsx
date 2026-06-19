@@ -11,6 +11,9 @@ export default function ReservasPage() {
 
   // Dados Estruturais do Banco
   const [semestreAtivo, setSemestreAtivo] = useState<any>(null);
+  const [versaoPublicadaId, setVersaoPublicadaId] = useState<string | null>(
+    null,
+  ); // NOVO ESTADO
   const [categorias, setCategorias] = useState<any[]>([]);
   const [espacos, setEspacos] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
@@ -89,14 +92,19 @@ export default function ReservasPage() {
       try {
         const [
           { data: periodosDb },
+          { data: versoesDb }, // Puxa todas as versões ordenadas
           { data: categoriasDb },
           { data: espacosDb },
           { data: slotsDb },
           { data: disciplinasDb },
           { data: turmasDb },
         ] = await Promise.all([
-          // BUSCA OS PERÍODOS LETIVOS ATIVOS NO NOVO MÓDULO
           supabase.from("periodos_letivos").select("*").eq("status", "ATIVO"),
+          // CORREÇÃO: Ordena as versões da mais nova para a mais antiga
+          supabase
+            .from("versoes_grade")
+            .select("*")
+            .order("data_inicio_vigencia", { ascending: false }),
           supabase.from("categorias_espacos").select("*").order("nome"),
           supabase.from("espacos").select("*").order("nome"),
           supabase
@@ -108,7 +116,26 @@ export default function ReservasPage() {
           supabase.from("turmas").select("id, codigo"),
         ]);
 
-        // LÓGICA DE ENVELOPE: Junta os períodos ativos (ex: Integrado e Superior) num único intervalo
+        // NOVA LÓGICA DE DETECÇÃO DA VERSÃO ATIVA
+        if (versoesDb && versoesDb.length > 0) {
+          const hoje = new Date().toISOString().split("T")[0];
+
+          // 1. Tenta achar a versão PUBLICADA que já está valendo hoje
+          let versaoAtiva = versoesDb.find(
+            (v) => v.status === "PUBLICADA" && v.data_inicio_vigencia <= hoje,
+          );
+
+          // 2. Se não achar, pega a última PUBLICADA (mesmo que a vigência seja pro futuro)
+          if (!versaoAtiva)
+            versaoAtiva = versoesDb.find((v) => v.status === "PUBLICADA");
+
+          // 3. Se não houver NENHUMA publicada (em fase de testes), pega o Rascunho mais recente
+          if (!versaoAtiva) versaoAtiva = versoesDb[0];
+
+          setVersaoPublicadaId(versaoAtiva.id);
+        }
+
+        // LÓGICA DE ENVELOPE (Mantida)
         if (periodosDb && periodosDb.length > 0) {
           let minData = new Date("2999-12-31T00:00:00");
           let maxData = new Date("2000-01-01T23:59:59");
@@ -163,8 +190,18 @@ export default function ReservasPage() {
       sextaFeira.setDate(sextaFeira.getDate() + 4);
       const sextaStr = sextaFeira.toISOString().split("T")[0];
 
+      let queryAulas = supabase
+        .from("aulas")
+        .select("*")
+        .eq("espaco_id", espacoSelecionado);
+
+      // FILTRA PARA MOSTRAR APENAS AS AULAS DA VERSÃO PUBLICADA
+      if (versaoPublicadaId) {
+        queryAulas = queryAulas.eq("versao_id", versaoPublicadaId);
+      }
+
       const [{ data: aulas }, { data: reservas }] = await Promise.all([
-        supabase.from("aulas").select("*").eq("espaco_id", espacoSelecionado),
+        queryAulas,
         supabase
           .from("reservas_espacos")
           .select("*")
@@ -185,12 +222,14 @@ export default function ReservasPage() {
 
   useEffect(() => {
     carregarOcupacaoDoEspaco();
-  }, [espacoSelecionado, dataSegundaFeira]);
+  }, [espacoSelecionado, dataSegundaFeira, versaoPublicadaId]);
 
   const espacosFiltrados = espacos.filter(
     (e) => String(e.categoria_id) === String(categoriaSelecionada),
   );
+
   const formatarHora = (hora: string) => (hora ? hora.substring(0, 5) : "");
+
   const obterDataDoDiaDaSemana = (diasAAdicionar: number) => {
     const d = new Date(dataSegundaFeira);
     d.setDate(d.getDate() + diasAAdicionar);
@@ -304,10 +343,7 @@ export default function ReservasPage() {
 
   const handleSlotOcupadoClick = (ocupacao: any) => {
     if (reservaCopiada) return;
-
-    if (ocupacao.tipo === "AULA") {
-      return;
-    }
+    if (ocupacao.tipo === "AULA") return;
 
     if (ocupacao.tipo === "RESERVA") {
       const res = ocupacao.raw;
@@ -346,12 +382,18 @@ export default function ReservasPage() {
       const dataObj = new Date(dataBusca + "T12:00:00");
       const diaDaSemana = diasSemana[dataObj.getDay()].id;
 
-      const { data: aulas } = await supabase
+      let queryAulas = supabase
         .from("aulas")
         .select("espaco_id")
         .eq("dia_semana", diaDaSemana)
-        .eq("slot_horario_id", slotBuscaId)
-        .eq("status", "ATIVO");
+        .eq("slot_horario_id", slotBuscaId);
+
+      // FILTRA A BUSCA APENAS PARA A VERSÃO PUBLICADA (TIRANDO O EQ STATUS ATIVO)
+      if (versaoPublicadaId) {
+        queryAulas = queryAulas.eq("versao_id", versaoPublicadaId);
+      }
+
+      const { data: aulas } = await queryAulas;
 
       const { data: reservas } = await supabase
         .from("reservas_espacos")
@@ -468,7 +510,6 @@ export default function ReservasPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 flex flex-col h-screen overflow-hidden relative">
-      {/* BARRA FLUTUANTE DO MODO CÓPIA */}
       {reservaCopiada && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 animate-bounce hover:animate-none cursor-default border-2 border-white">
           <div>
@@ -490,7 +531,6 @@ export default function ReservasPage() {
         </div>
       )}
 
-      {/* MODAL DE RESERVA */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
@@ -546,14 +586,6 @@ export default function ReservasPage() {
                       nome_solicitante: e.target.value,
                     })
                   }
-                  onInvalid={(e) =>
-                    (e.target as HTMLInputElement).setCustomValidity(
-                      "Por favor, preencha o nome do solicitante.",
-                    )
-                  }
-                  onInput={(e) =>
-                    (e.target as HTMLInputElement).setCustomValidity("")
-                  }
                   className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-600 focus:ring-1 focus:ring-green-600 outline-none"
                 />
               </div>
@@ -570,14 +602,6 @@ export default function ReservasPage() {
                       ...formReserva,
                       email_solicitante: e.target.value,
                     })
-                  }
-                  onInvalid={(e) =>
-                    (e.target as HTMLInputElement).setCustomValidity(
-                      "Por favor, insira um endereço de e-mail válido.",
-                    )
-                  }
-                  onInput={(e) =>
-                    (e.target as HTMLInputElement).setCustomValidity("")
                   }
                   className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-600 focus:ring-1 focus:ring-green-600 outline-none"
                 />
@@ -598,14 +622,6 @@ export default function ReservasPage() {
                         turma_curso: e.target.value,
                       })
                     }
-                    onInvalid={(e) =>
-                      (e.target as HTMLInputElement).setCustomValidity(
-                        "Por favor, informe a turma ou curso.",
-                      )
-                    }
-                    onInput={(e) =>
-                      (e.target as HTMLInputElement).setCustomValidity("")
-                    }
                     className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-600 outline-none"
                   />
                 </div>
@@ -622,14 +638,6 @@ export default function ReservasPage() {
                         ...formReserva,
                         disciplina_evento: e.target.value,
                       })
-                    }
-                    onInvalid={(e) =>
-                      (e.target as HTMLInputElement).setCustomValidity(
-                        "Por favor, informe o evento ou disciplina.",
-                      )
-                    }
-                    onInput={(e) =>
-                      (e.target as HTMLInputElement).setCustomValidity("")
                     }
                     className="w-full border border-gray-300 rounded p-2 text-sm focus:border-green-600 outline-none"
                   />
@@ -704,10 +712,10 @@ export default function ReservasPage() {
           </div>
           <div className="flex items-center bg-green-900/40 px-3 py-2 rounded-xl border border-green-700/50">
             <Link
-              href="/painel"
+              href="/"
               className="bg-white text-green-800 px-3 py-1.5 rounded text-xs font-bold shadow-sm hover:bg-green-50 transition-all active:scale-95 flex items-center gap-2"
             >
-              <span>⬅</span> Voltar
+              <span>⬅</span> Início
             </Link>
           </div>
         </div>
@@ -737,11 +745,7 @@ export default function ReservasPage() {
                   setVeioDaBusca(false);
                   setReservaCopiada(null);
                 }}
-                className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${
-                  abaAtiva === "HORARIO"
-                    ? "bg-white text-green-700 border-b-2 border-green-600 shadow-sm"
-                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                }`}
+                className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${abaAtiva === "HORARIO" ? "bg-white text-green-700 border-b-2 border-green-600 shadow-sm" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
               >
                 ⏱️ Buscar por Horário
               </button>
@@ -751,11 +755,7 @@ export default function ReservasPage() {
                   setVeioDaBusca(false);
                   setReservaCopiada(null);
                 }}
-                className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${
-                  abaAtiva === "ESPACO"
-                    ? "bg-white text-green-700 border-b-2 border-green-600 shadow-sm"
-                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-                }`}
+                className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-widest transition-all ${abaAtiva === "ESPACO" ? "bg-white text-green-700 border-b-2 border-green-600 shadow-sm" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"}`}
               >
                 🔍 Buscar por Espaço
               </button>
@@ -885,13 +885,11 @@ export default function ReservasPage() {
                               </p>
                             </div>
                           </div>
-
                           {categorias.map((cat) => {
                             const espacosDaCat = espacosDisponiveis.filter(
                               (e) => String(e.categoria_id) === String(cat.id),
                             );
                             if (espacosDaCat.length === 0) return null;
-
                             return (
                               <div key={cat.id} className="mb-6">
                                 <h3 className="text-sm font-black text-gray-500 uppercase tracking-widest border-b border-gray-200 pb-2 mb-3">
@@ -1086,14 +1084,12 @@ export default function ReservasPage() {
                                       até {formatarHora(slot.hora_fim)}
                                     </div>
                                   </td>
-
                                   {diasUteis.map((dia, idx) => {
                                     const ocupacao = obterOcupacaoCelular(
                                       dia.id,
                                       slot.id,
                                       idx,
                                     );
-
                                     if (ocupacao) {
                                       const isReserva =
                                         ocupacao.tipo === "RESERVA";
@@ -1103,11 +1099,7 @@ export default function ReservasPage() {
                                           onClick={() =>
                                             handleSlotOcupadoClick(ocupacao)
                                           }
-                                          className={`p-1.5 border-r border-gray-200 align-middle text-[10px] md:text-[11px] font-bold uppercase tracking-tight select-none transition-colors ${
-                                            isReserva && !reservaCopiada
-                                              ? "bg-gray-100 hover:bg-indigo-50 cursor-pointer"
-                                              : "bg-gray-100 text-gray-500"
-                                          }`}
+                                          className={`p-1.5 border-r border-gray-200 align-middle text-[10px] md:text-[11px] font-bold uppercase tracking-tight select-none transition-colors ${isReserva && !reservaCopiada ? "bg-gray-100 hover:bg-indigo-50 cursor-pointer" : "bg-gray-100 text-gray-500"}`}
                                         >
                                           <div
                                             className={`rounded p-2 line-clamp-3 leading-snug ${isReserva && !reservaCopiada ? "bg-white border border-indigo-100 text-indigo-800 shadow-sm" : "bg-gray-200/60 text-gray-600"}`}
@@ -1120,7 +1112,6 @@ export default function ReservasPage() {
                                         </td>
                                       );
                                     }
-
                                     return (
                                       <td
                                         key={dia.id}
@@ -1131,11 +1122,7 @@ export default function ReservasPage() {
                                             idx,
                                           )
                                         }
-                                        className={`p-1.5 border-r border-gray-200 align-middle group transition-all cursor-pointer ${
-                                          reservaCopiada
-                                            ? "bg-blue-50/50 hover:bg-blue-500"
-                                            : "bg-green-50/30 hover:bg-green-600"
-                                        }`}
+                                        className={`p-1.5 border-r border-gray-200 align-middle group transition-all cursor-pointer ${reservaCopiada ? "bg-blue-50/50 hover:bg-blue-500" : "bg-green-50/30 hover:bg-green-600"}`}
                                       >
                                         <div
                                           className={`font-black text-[10px] tracking-wider uppercase group-hover:text-white ${reservaCopiada ? "text-blue-600/60" : "text-green-700/60"}`}
