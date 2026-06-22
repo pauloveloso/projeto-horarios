@@ -492,11 +492,17 @@ export default function ModoPlanilha({
                     corHexadecimal ? { backgroundColor: corHexadecimal } : {}
                   }
                 >
+                  {/* COLUNA: TURMA */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden text-center">
                     {linha.turma_id === undefined ? (
                       ""
                     ) : (
                       <select
+                        title={
+                          turmas.find(
+                            (t: any) => String(t.id) === String(linha.turma_id),
+                          )?.codigo || "Selecione..."
+                        }
                         value={linha.turma_id || ""}
                         onChange={(e) =>
                           atualizarCampo(linha.id, "turma_id", e.target.value)
@@ -526,10 +532,18 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: DISCIPLINA */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
                     {linha.id.length > 2 && (
                       <select
                         disabled={!linha.turma_id}
+                        title={
+                          disciplinas.find(
+                            (d: any) =>
+                              String(d.id) === String(linha.disciplina_id),
+                          )?.nome || "Selecione..."
+                        }
                         value={linha.disciplina_id || ""}
                         onChange={(e) =>
                           atualizarCampo(
@@ -549,9 +563,17 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: PROFESSOR */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
                     {linha.id.length > 2 && (
                       <select
+                        title={
+                          professores.find(
+                            (p: any) =>
+                              String(p.id) === String(linha.professor_id),
+                          )?.nome || "(Nenhum)"
+                        }
                         value={linha.professor_id || ""}
                         onChange={(e) =>
                           atualizarCampo(
@@ -571,9 +593,17 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: SALA/ESPAÇO */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
                     {linha.id.length > 2 && (
                       <select
+                        title={
+                          espacos.find(
+                            (e: any) =>
+                              String(e.id) === String(linha.espaco_id),
+                          )?.nome || "(Nenhum)"
+                        }
                         value={linha.espaco_id || ""}
                         onChange={(e) =>
                           atualizarCampo(linha.id, "espaco_id", e.target.value)
@@ -615,9 +645,12 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: DIA DA SEMANA */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
                     {linha.id.length > 2 && (
                       <select
+                        title={linha.dia_semana || "Selecione..."}
                         value={linha.dia_semana || ""}
                         onChange={(e) =>
                           atualizarCampo(linha.id, "dia_semana", e.target.value)
@@ -633,9 +666,19 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: HORÁRIO */}
                   <td className="p-2 border-r border-gray-300 overflow-hidden">
                     {linha.id.length > 2 && (
                       <select
+                        title={
+                          slots.find(
+                            (s: any) =>
+                              String(s.id) === String(linha.slot_horario_id),
+                          )
+                            ? `${formatarHora(slots.find((s: any) => String(s.id) === String(linha.slot_horario_id))?.hora_inicio)} às ${formatarHora(slots.find((s: any) => String(s.id) === String(linha.slot_horario_id))?.hora_fim)}`
+                            : "Selecione..."
+                        }
                         value={linha.slot_horario_id || ""}
                         onChange={(e) =>
                           atualizarCampo(
@@ -656,6 +699,8 @@ export default function ModoPlanilha({
                       </select>
                     )}
                   </td>
+
+                  {/* COLUNA: AÇÕES */}
                   <td className="p-2 text-center">
                     {linha.id.length > 2 && (
                       <div className="flex items-center justify-center gap-1.5">
@@ -672,14 +717,14 @@ export default function ModoPlanilha({
                         <button
                           onClick={() => duplicarLinha(linha.id)}
                           className="text-blue-600/60 hover:text-blue-700 font-bold p-1 rounded text-lg"
-                          title="Duplicar"
+                          title="Duplicar Linha"
                         >
                           ⧉
                         </button>
                         <button
                           onClick={() => removerLinha(linha.id)}
                           className="text-red-600/60 hover:text-red-700 font-bold p-1 rounded"
-                          title="Remover"
+                          title="Remover Linha"
                         >
                           ✕
                         </button>
