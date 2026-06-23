@@ -7,7 +7,7 @@ import Link from "next/link";
 export default function DashboardPage() {
   const [carregando, setCarregando] = useState(true);
 
-  // NOVO: Estados para controlar a versão
+  // Estados para controlar a versão
   const [versoes, setVersoes] = useState<any[]>([]);
   const [versaoSelecionada, setVersaoSelecionada] = useState<string>("");
 
@@ -20,9 +20,8 @@ export default function DashboardPage() {
 
   const [choquesCriticos, setChoquesCriticos] = useState<any[]>([]);
   const [alertasSecundarios, setAlertasSecundarios] = useState<any[]>([]);
-  const [rankingCarga, setRankingCarga] = useState<any[]>([]);
 
-  // NOVO: Carrega as versões primeiro
+  // Carrega as versões primeiro
   useEffect(() => {
     async function carregarVersoes() {
       const { data } = await supabase
@@ -70,7 +69,6 @@ export default function DashboardPage() {
         { data: espacos },
         { data: slots },
       ] = await Promise.all([
-        // CORREÇÃO APLICADA: Filtro explícito pela versão selecionada
         supabase
           .from("aulas")
           .select("*")
@@ -120,7 +118,6 @@ export default function DashboardPage() {
     let semSala = 0;
     let criticos: any[] = [];
     let secundarios: any[] = [];
-    let contagemProfessores: Record<string, number> = {};
 
     const formatarHorario = (dia: string, slotId: string) => {
       const slot = slots.find((s) => String(s.id) === String(slotId));
@@ -132,8 +129,6 @@ export default function DashboardPage() {
       if (!aulaAtual.espaco_id) semSala++;
 
       if (aulaAtual.professor_id) {
-        contagemProfessores[aulaAtual.professor_id] =
-          (contagemProfessores[aulaAtual.professor_id] || 0) + 1;
         const prof = professores.find(
           (p) => String(p.id) === String(aulaAtual.professor_id),
         );
@@ -143,7 +138,7 @@ export default function DashboardPage() {
             String(aulaAtual.dia_semana).toUpperCase()
         ) {
           secundarios.push({
-            tipo: "Planejamento",
+            tipo: "Dia de Planejamento",
             msg: `Professor(a) ${prof.nome} está alocado(a) no dia de planejamento (${aulaAtual.dia_semana}).`,
             local: `Turma ${getNome(turmas, aulaAtual.turma_id, "codigo")} - ${getNome(disciplinas, aulaAtual.disciplina_id)}`,
           });
@@ -198,13 +193,6 @@ export default function DashboardPage() {
       }
     });
 
-    const ranking = Object.keys(contagemProfessores)
-      .map((profId) => ({
-        nome: getNome(professores, profId),
-        aulas: contagemProfessores[profId],
-      }))
-      .sort((a, b) => b.aulas - a.aulas);
-
     const criticosUnicos = Array.from(
       new Set(criticos.map((c) => JSON.stringify(c))),
     ).map((s) => JSON.parse(s));
@@ -214,7 +202,6 @@ export default function DashboardPage() {
 
     setChoquesCriticos(criticosUnicos);
     setAlertasSecundarios(secUnicos);
-    setRankingCarga(ranking);
     setMetricas({
       totalAulas: aulasAlocadas.length,
       semProfessor: semProf,
@@ -222,6 +209,18 @@ export default function DashboardPage() {
       totalConflitos: criticosUnicos.length,
     });
   };
+
+  // Funções para agrupar os arrays por tipo
+  const agruparPorTipo = (lista: any[]) => {
+    return lista.reduce((acc: any, curr: any) => {
+      if (!acc[curr.tipo]) acc[curr.tipo] = [];
+      acc[curr.tipo].push(curr);
+      return acc;
+    }, {});
+  };
+
+  const criticosAgrupados = agruparPorTipo(choquesCriticos);
+  const alertasAgrupados = agruparPorTipo(alertasSecundarios);
 
   if (carregando && !versaoSelecionada) {
     return (
@@ -319,7 +318,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ACESSO RÁPIDO - RELATÓRIOS (NOVA SEÇÃO) */}
+      {/* ACESSO RÁPIDO - RELATÓRIOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
           href="/relatorios/professores"
@@ -356,123 +355,115 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ALERTAS E ERROS */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* BLOCO CRÍTICO - bg-gray-50 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="font-bold text-gray-700 flex items-center gap-2">
-                <span className="text-red-600">⛔</span> Impedimentos Físicos
-              </h2>
-              <span className="bg-red-100 text-red-700 font-black text-xs px-2 py-1 rounded-full">
-                {choquesCriticos.length}
-              </span>
-            </div>
-            <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 custom-scrollbar">
-              {choquesCriticos.length === 0 ? (
-                <div className="p-10 text-center text-gray-400 font-medium">
-                  Nenhum choque de horário detectado.
-                </div>
-              ) : (
-                choquesCriticos.map((choque, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 hover:bg-red-50/30 transition-colors"
-                  >
-                    <p className="font-bold text-gray-800 text-sm">
-                      {choque.msg}
-                    </p>
-                    <p className="text-xs font-bold text-red-600 mt-1 uppercase tracking-tighter">
-                      {choque.detalhe}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* BLOCO LADO A LADO: IMPEDIMENTOS E ALERTAS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* BLOCO CRÍTICO */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="font-bold text-gray-700 flex items-center gap-2">
+              <span className="text-red-600">⛔</span> Impedimentos Físicos
+            </h2>
+            <span className="bg-red-100 text-red-700 font-black text-xs px-2 py-1 rounded-full">
+              {choquesCriticos.length}
+            </span>
           </div>
 
-          {/* BLOCO PEDAGÓGICO - bg-gray-50 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="font-bold text-gray-700 flex items-center gap-2">
-                <span className="text-yellow-500">⚠️</span> Alertas de
-                Planejamento
-              </h2>
-              <span className="bg-yellow-100 text-yellow-700 font-black text-xs px-2 py-1 rounded-full">
-                {alertasSecundarios.length}
-              </span>
-            </div>
-            <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-100 custom-scrollbar">
-              {alertasSecundarios.length === 0 ? (
-                <div className="p-6 text-center text-gray-400 text-sm italic">
-                  Nenhum alerta pedagógico.
-                </div>
-              ) : (
-                alertasSecundarios.map((alerta, idx) => (
-                  <div key={idx} className="p-4">
-                    <p className="font-bold text-gray-800 text-sm">
-                      {alerta.msg}
-                    </p>
-                    <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase italic">
-                      {alerta.local}
-                    </p>
+          <div className="h-[450px] overflow-y-auto custom-scrollbar bg-white">
+            {choquesCriticos.length === 0 ? (
+              <div className="p-10 text-center text-gray-400 font-medium h-full flex flex-col items-center justify-center">
+                <span className="text-4xl mb-2 opacity-50">👍</span>
+                Nenhum choque detectado.
+              </div>
+            ) : (
+              Object.keys(criticosAgrupados)
+                .sort()
+                .map((tipo, tIdx) => (
+                  <div
+                    key={tIdx}
+                    className="border-b border-gray-100 last:border-0"
+                  >
+                    <div className="bg-red-50/50 px-4 py-2 text-xs font-black text-red-800 uppercase tracking-widest border-b border-red-100/50 sticky top-0 z-10 backdrop-blur-sm shadow-sm flex justify-between items-center">
+                      <span>{tipo}</span>
+                      <span className="bg-white text-red-600 px-2 py-0.5 rounded-full border border-red-200 text-[10px]">
+                        {criticosAgrupados[tipo].length}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {criticosAgrupados[tipo].map(
+                        (choque: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="p-4 hover:bg-red-50/30 transition-colors"
+                          >
+                            <p className="font-bold text-gray-800 text-sm">
+                              {choque.msg}
+                            </p>
+                            <p className="text-[11px] font-bold text-red-600 mt-1 uppercase tracking-wider">
+                              {choque.detalhe}
+                            </p>
+                          </div>
+                        ),
+                      )}
+                    </div>
                   </div>
                 ))
-              )}
-            </div>
+            )}
           </div>
         </div>
 
-        {/* MINI TERMÔMETRO (TOP 5) */}
+        {/* BLOCO PEDAGÓGICO */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-            <div>
-              <h2 className="font-bold text-gray-700">Top 5 Cargas</h2>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">
-                Maiores ocupações
-              </p>
-            </div>
-            <span className="text-xl">📊</span>
+            <h2 className="font-bold text-gray-700 flex items-center gap-2">
+              <span className="text-yellow-500">⚠️</span> Alertas de
+              Planejamento
+            </h2>
+            <span className="bg-yellow-100 text-yellow-700 font-black text-xs px-2 py-1 rounded-full">
+              {alertasSecundarios.length}
+            </span>
           </div>
-          <div className="p-4 space-y-4 flex-1">
-            {rankingCarga.slice(0, 5).map((prof, idx) => {
-              const percentual = Math.min((prof.aulas / 20) * 100, 100);
-              const corBarra =
-                prof.aulas >= 20
-                  ? "bg-red-500"
-                  : prof.aulas >= 16
-                    ? "bg-orange-500"
-                    : "bg-green-500";
 
-              return (
-                <div key={idx}>
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="font-bold text-xs text-gray-700 truncate pr-2">
-                      {prof.nome}
-                    </span>
-                    <span className="text-[10px] font-black text-gray-500">
-                      {prof.aulas} aulas
-                    </span>
+          <div className="h-[450px] overflow-y-auto custom-scrollbar bg-white">
+            {alertasSecundarios.length === 0 ? (
+              <div className="p-10 text-center text-gray-400 font-medium h-full flex flex-col items-center justify-center">
+                <span className="text-4xl mb-2 opacity-50">✨</span>
+                Nenhum alerta pedagógico.
+              </div>
+            ) : (
+              Object.keys(alertasAgrupados)
+                .sort()
+                .map((tipo, tIdx) => (
+                  <div
+                    key={tIdx}
+                    className="border-b border-gray-100 last:border-0"
+                  >
+                    <div className="bg-yellow-50/50 px-4 py-2 text-xs font-black text-yellow-800 uppercase tracking-widest border-b border-yellow-100/50 sticky top-0 z-10 backdrop-blur-sm shadow-sm flex justify-between items-center">
+                      <span>{tipo}</span>
+                      <span className="bg-white text-yellow-600 px-2 py-0.5 rounded-full border border-yellow-200 text-[10px]">
+                        {alertasAgrupados[tipo].length}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {alertasAgrupados[tipo].map(
+                        (alerta: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className="p-4 hover:bg-yellow-50/30 transition-colors"
+                          >
+                            <p className="font-bold text-gray-800 text-sm">
+                              {alerta.msg}
+                            </p>
+                            <p className="text-[11px] text-gray-500 font-bold mt-1 uppercase italic">
+                              {alerta.local}
+                            </p>
+                          </div>
+                        ),
+                      )}
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className={`${corBarra} h-full transition-all`}
-                      style={{ width: `${percentual}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {rankingCarga.length === 0 && (
-              <p className="text-center text-gray-400 text-xs py-10">
-                Aguardando lançamentos...
-              </p>
+                ))
             )}
           </div>
-
-          {/* Removi o link duplicado daqui pois agora ele é um dos botões principais acima */}
         </div>
       </div>
     </div>
